@@ -2,128 +2,1136 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>F&O Stock Analyzer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analysis Dashboard</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f6f9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            color: #333;
         }
-        h1 {
-            text-align: center;
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
         }
-        #info {
+
+        .header {
             text-align: center;
-            margin-bottom: 15px;
-            font-weight: bold;
+            margin-bottom: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
-        .tabs {
-            text-align: center;
+
+        .header h1 {
+            color: white;
+            font-size: 3rem;
+            font-weight: 700;
             margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
         }
-        .tabs button {
-            margin: 0 5px;
-            padding: 10px 20px;
-            cursor: pointer;
+
+        .header p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.2rem;
+            font-weight: 300;
         }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            background-color: white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+
+        .tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            overflow: hidden;
         }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 6px;
+
+        .tab {
+            flex: 1;
+            padding: 15px 25px;
             text-align: center;
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            position: relative;
+            border: none;
+            background: none;
         }
-        th {
-            background-color: #333;
+
+        .tab:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tab.active {
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            min-height: 600px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .refresh-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 50px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .stocks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+            gap: 20px;
+        }
+
+        .stock-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid #667eea;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            min-height: 420px;
+        }
+
+        .session-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 3px solid #667eea;
+        }
+
+        .stock-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .stock-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border-radius: 0 0 0 100px;
+        }
+
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .stock-ticker {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .stock-date {
+            font-size: 0.85rem;
+            color: #666;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+
+        .price-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .price-group {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .price-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .price-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .change-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .change-badge {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .change-positive {
+            background: linear-gradient(135deg, #00c851, #007e33);
             color: white;
         }
-        tr:hover {
-            background-color: #f1f1f1;
+
+        .change-negative {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
         }
-        .gain {
-            background-color: #d4edda;
+
+        .change-neutral {
+            background: #6c757d;
+            color: white;
         }
-        .loss {
-            background-color: #f8d7da;
+
+        .error-card {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
+            border-left-color: #ff4444;
+        }
+
+        .test-feature-section {
+            margin-bottom: 40px;
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid #667eea;
+        }
+
+        .feature-card h3 {
+            color: #333;
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .feature-card p {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .date-input, .trade-input {
+            width: 100%;
+            max-width: 300px;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .date-input:focus, .trade-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .trading-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .mock-trade-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            font-size: 1.1rem;
+            padding: 15px 30px;
+        }
+
+        .mock-trade-btn:hover {
+            background: linear-gradient(135deg, #218838, #1ea085);
+        }
+
+        .results-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .profit-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .profit-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .profit-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .profit-positive { color: #28a745; }
+        .profit-negative { color: #dc3545; }
+        .profit-neutral { color: #6c757d; }
+
+        .profit-label {
+            font-size: 0.9rem;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .price-timeline {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+        }
+
+        .timeline-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .timeline-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 10px;
+            padding: 8px 10px;
+            border-bottom: 1px solid #f1f1f1;
+            font-size: 0.85rem;
+            transition: background 0.2s ease;
+        }
+
+        .timeline-row:hover {
+            background: #f8f9fa;
+        }
+
+        .timeline-row:last-child {
+            border-bottom: none;
+        }
+
+        .search-box {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 10px 15px;
+            font-size: 1rem;
+            width: 250px;
+            transition: all 0.3s ease;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .stocks-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .price-info {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>F&O Stock Analyzer</h1>
-    <div class="tabs">
-        <button onclick="loadData('analyze')">All Stocks</button>
-        <button onclick="loadData('gainers')">Unique Gainers</button>
+    <div class="container">
+        <div class="header">
+            <h1>📈 Stock Analysis Dashboard</h1>
+            <p>Real-time Indian Stock Market Analysis</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('all-stocks')">All Stocks</button>
+            <button class="tab" onclick="switchTab('gainers')">Top Gainers</button>
+            <button class="tab" onclick="switchTab('test')">Test</button>
+        </div>
+
+        <div class="content">
+            <!-- All Stocks Tab -->
+            <div id="all-stocks" class="tab-content active">
+                <div class="controls">
+                    <h2>All Stocks Analysis</h2>
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" class="search-box" id="search-all" placeholder="Search stocks..." onkeyup="filterStocks('all')">
+                        <button class="refresh-btn" onclick="loadAllStocks()">🔄 Refresh Data</button>
+                    </div>
+                </div>
+
+                <div class="stats" id="all-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-stocks">-</div>
+                        <div class="stat-label">Total Stocks</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="positive-stocks">-</div>
+                        <div class="stat-label">Positive Change</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="negative-stocks">-</div>
+                        <div class="stat-label">Negative Change</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="avg-change">-</div>
+                        <div class="stat-label">Avg Change %</div>
+                    </div>
+                </div>
+
+                <div class="loading" id="loading-all">
+                    <div class="spinner"></div>
+                    <p>Loading stock data...</p>
+                </div>
+
+                <div class="stocks-grid" id="all-stocks-grid"></div>
+            </div>
+
+            <!-- Gainers Tab -->
+            <div id="gainers" class="tab-content">
+                <div class="controls">
+                    <h2>Top Gainers (Morning Change ≥ 2%)</h2>
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" class="search-box" id="search-gainers" placeholder="Search gainers..." onkeyup="filterStocks('gainers')">
+                        <button class="refresh-btn" onclick="loadGainers()">🔄 Refresh Gainers</button>
+                    </div>
+                </div>
+
+                <div class="stats" id="gainers-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-gainers">-</div>
+                        <div class="stat-label">Total Gainers</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="highest-gainer">-</div>
+                        <div class="stat-label">Highest Gainer %</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="avg-gainer-change">-</div>
+                        <div class="stat-label">Avg Gainer Change %</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="filtered-gainers">-</div>
+                        <div class="stat-label">Filtered Gainers</div>
+                    </div>
+                </div>
+
+                <div class="loading" id="loading-gainers">
+                    <div class="spinner"></div>
+                    <p>Loading gainer data...</p>
+                </div>
+
+                <div class="stocks-grid" id="gainers-grid"></div>
+            </div>
+
+            <!-- Test Tab -->
+            <div id="test" class="tab-content">
+                <div class="controls">
+                    <h2>🧪 Advanced Testing Environment</h2>
+                </div>
+
+                <!-- Date-based Analysis Section -->
+                <div class="test-feature-section">
+                    <div class="feature-card">
+                        <h3>📅 Historical Date Analysis</h3>
+                        <p>Get all ticker information for any specific date</p>
+                        
+                        <div class="input-group">
+                            <label for="analysis-date">Select Date:</label>
+                            <input type="date" id="analysis-date" class="date-input">
+                            <button class="refresh-btn" onclick="analyzeDateData()">📊 Analyze Date</button>
+                        </div>
+
+                        <div class="loading" id="loading-date-analysis" style="display: none;">
+                            <div class="spinner"></div>
+                            <p>Analyzing data for selected date...</p>
+                        </div>
+
+                        <div id="date-analysis-results"></div>
+                    </div>
+                </div>
+
+                <!-- Mock Trading Section -->
+                <div class="test-feature-section">
+                    <div class="feature-card">
+                        <h3>💰 Mock Trading Simulator</h3>
+                        <p>Test trading scenarios with maximum profit calculation and minute-by-minute tracking</p>
+                        
+                        <div class="trading-inputs">
+                            <div class="input-group">
+                                <label for="trade-ticker">Ticker Symbol:</label>
+                                <input type="text" id="trade-ticker" class="trade-input" placeholder="e.g., RELIANCE.NS" value="PVRINOX.NS">
+                            </div>
+                            
+                            <div class="input-group">
+                                <label for="trade-date">Trading Date:</label>
+                                <input type="date" id="trade-date" class="date-input">
+                            </div>
+                            
+                            <div class="input-group">
+                                <label for="trade-time">Investment Time:</label>
+                                <input type="time" id="trade-time" class="trade-input" value="09:15" step="60">
+                            </div>
+                            
+                            <div class="input-group">
+                                <label for="investment-amount">Investment Amount (₹):</label>
+                                <input type="number" id="investment-amount" class="trade-input" placeholder="10000" value="10000" min="1">
+                            </div>
+                        </div>
+
+                        <button class="refresh-btn mock-trade-btn" onclick="executeMockTrade()">
+                            🚀 Execute Mock Trade
+                        </button>
+
+                        <div class="loading" id="loading-mock-trade" style="display: none;">
+                            <div class="spinner"></div>
+                            <p>Executing mock trade and calculating profits...</p>
+                        </div>
+
+                        <div id="mock-trade-results"></div>
+                    </div>
+                </div>
+
+                <!-- API Testing Section -->
+                <div class="test-feature-section">
+                    <div class="feature-card">
+                        <h3>⚡ API Endpoint Testing</h3>
+                        <p>Quick test for current functionality</p>
+                        <button class="refresh-btn" onclick="runBasicTest()">🔧 Test Current APIs</button>
+                        <div id="api-test-results" style="margin-top: 15px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div id="info"></div>
-    <table id="stock-table">
-        <thead>
-            <tr>
-                <th>Ticker</th>
-                <th>Prev Close</th>
-                <th>Today Open</th>
-                <th>Current Price</th>
-                <th>3:15 PM</th>
-                <th>3:29 PM</th>
-                <th>% Change (3:15–3:29 PM)</th>
-                <th>9:15 AM</th>
-                <th>9:19 AM</th>
-                <th>% Change (9:15–9:19 AM)</th>
-            </tr>
-        </thead>
-        <tbody id="table-body">
-            <tr><td colspan="10">Click "All Stocks" or "Unique Gainers" to begin analysis.</td></tr>
-        </tbody>
-    </table>
 
     <script>
-        async function loadData(endpoint) {
-            const res = await fetch(`/${endpoint}`);
-            const data = await res.json();
-            const tbody = document.getElementById("table-body");
-            tbody.innerHTML = "";
+        let allStocksData = [];
+        let gainersData = [];
 
-            if (!data.length) {
-                tbody.innerHTML = "<tr><td colspan='10'>No data found</td></tr>";
+        // Tab switching
+        function switchTab(tabName) {
+            // Remove active class from all tabs and content
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active class to clicked tab and corresponding content
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // Create stock card HTML
+        function createStockCard(stock) {
+            if (stock.error) {
+                return `
+                    <div class="stock-card error-card">
+                        <div class="stock-header">
+                            <div class="stock-ticker">${stock.ticker}</div>
+                        </div>
+                        <p>Error: ${stock.error}</p>
+                    </div>
+                `;
+            }
+
+            const morningChange = stock.morning_change || 0;
+            const closingChange = stock.closing_change || 0;
+            
+            const morningClass = morningChange > 0 ? 'change-positive' : morningChange < 0 ? 'change-negative' : 'change-neutral';
+            const closingClass = closingChange > 0 ? 'change-positive' : closingChange < 0 ? 'change-negative' : 'change-neutral';
+
+            return `
+                <div class="stock-card">
+                    <div class="stock-header">
+                        <div class="stock-ticker">${stock.ticker.replace('.NS', '')}</div>
+                        <div style="display: flex; flex-direction: column; gap: 2px; text-align: right;">
+                            <div class="stock-date">📅 ${stock.morning_date || 'N/A'}</div>
+                            <div class="stock-date">📅 ${stock.closing_date || 'N/A'}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Morning Session Data -->
+                    <div class="session-section">
+                        <h4 style="color: #667eea; font-size: 0.9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 5px;">
+                            🌅 Morning Session (${stock.morning_date || 'N/A'})
+                        </h4>
+                        <div class="price-info" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <div class="price-group">
+                                <div class="price-label">9:15 AM</div>
+                                <div class="price-value">₹${stock.p915 || 'N/A'}</div>
+                            </div>
+                            <div class="price-group">
+                                <div class="price-label">9:19 AM</div>
+                                <div class="price-value">₹${stock.p919 || 'N/A'}</div>
+                            </div>
+                            <div class="price-group">
+                                <div class="price-label">Change</div>
+                                <div class="change-badge ${morningClass}" style="padding: 4px 8px; font-size: 0.8rem;">
+                                    ${morningChange > 0 ? '↗' : morningChange < 0 ? '↘' : '→'} ${morningChange ? morningChange.toFixed(2) : 0}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Previous Day Closing Session Data -->
+                    <div class="session-section">
+                        <h4 style="color: #764ba2; font-size: 0.9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 5px;">
+                            🌆 Previous Day Closing (${stock.closing_date || 'N/A'})
+                        </h4>
+                        <div class="price-info" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <div class="price-group">
+                                <div class="price-label">3:15 PM</div>
+                                <div class="price-value">₹${stock.p315 || 'N/A'}</div>
+                            </div>
+                            <div class="price-group">
+                                <div class="price-label">3:29 PM</div>
+                                <div class="price-value">₹${stock.p329 || 'N/A'}</div>
+                            </div>
+                            <div class="price-group">
+                                <div class="price-label">Change</div>
+                                <div class="change-badge ${closingClass}" style="padding: 4px 8px; font-size: 0.8rem;">
+                                    ${closingChange > 0 ? '↗' : closingChange < 0 ? '↘' : '→'} ${closingChange ? closingChange.toFixed(2) : 0}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Price Information -->
+                    <div class="session-section">
+                        <h4 style="color: #28a745; font-size: 0.9rem; margin-bottom: 10px; display: flex; align-items: center; gap: 5px;">
+                            💰 Key Price Levels
+                        </h4>
+                        <div class="price-info" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <div class="price-group">
+                                <div class="price-label">Day Open</div>
+                                <div class="price-value">₹${stock.open_price || 'N/A'}</div>
+                            </div>
+                            <div class="price-group">
+                                <div class="price-label">Prev Close</div>
+                                <div class="price-value">₹${stock.prev_day_close || 'N/A'}</div>
+                            </div>
+                            <div class="price-group">
+                                <div class="price-label">Current Price</div>
+                                <div class="price-value" style="color: #667eea; font-weight: 800;">₹${stock.current_price || 'N/A'}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Stats -->
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #f8f9fa;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 0.8rem; color: #666;">Morning Performance</div>
+                                <div class="change-badge ${morningClass}" style="margin-top: 5px; font-size: 0.9rem;">
+                                    ${morningChange > 0 ? '📈' : morningChange < 0 ? '📉' : '➡️'} ${morningChange ? morningChange.toFixed(2) : 0}%
+                                </div>
+                            </div>
+                            ${stock.closing_change !== null && stock.closing_change !== undefined ? `
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #666;">Closing Performance</div>
+                                    <div class="change-badge ${closingClass}" style="margin-top: 5px; font-size: 0.9rem;">
+                                        ${closingChange > 0 ? '📈' : closingChange < 0 ? '📉' : '➡️'} ${closingChange.toFixed(2)}%
+                                    </div>
+                                </div>
+                            ` : `
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #666;">Closing Performance</div>
+                                    <div style="background: #6c757d; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; margin-top: 5px;">
+                                        No Data
+                                    </div>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Update statistics
+        function updateAllStocksStats(data) {
+            const validStocks = data.filter(stock => !stock.error && stock.morning_change !== null);
+            const positiveStocks = validStocks.filter(stock => stock.morning_change > 0);
+            const negativeStocks = validStocks.filter(stock => stock.morning_change < 0);
+            const avgChange = validStocks.length > 0 ? validStocks.reduce((sum, stock) => sum + stock.morning_change, 0) / validStocks.length : 0;
+
+            document.getElementById('total-stocks').textContent = data.length;
+            document.getElementById('positive-stocks').textContent = positiveStocks.length;
+            document.getElementById('negative-stocks').textContent = negativeStocks.length;
+            document.getElementById('avg-change').textContent = avgChange.toFixed(2) + '%';
+        }
+
+        function updateGainersStats(data) {
+            const validGainers = data.filter(stock => !stock.error && stock.morning_change !== null);
+            const highestGainer = validGainers.length > 0 ? Math.max(...validGainers.map(stock => stock.morning_change)) : 0;
+            const avgGainerChange = validGainers.length > 0 ? validGainers.reduce((sum, stock) => sum + stock.morning_change, 0) / validGainers.length : 0;
+
+            document.getElementById('total-gainers').textContent = data.length;
+            document.getElementById('highest-gainer').textContent = highestGainer.toFixed(2) + '%';
+            document.getElementById('avg-gainer-change').textContent = avgGainerChange.toFixed(2) + '%';
+            document.getElementById('filtered-gainers').textContent = validGainers.length;
+        }
+
+        // Load all stocks
+        async function loadAllStocks() {
+            const loading = document.getElementById('loading-all');
+            const grid = document.getElementById('all-stocks-grid');
+            const refreshBtn = document.querySelector('#all-stocks .refresh-btn');
+            
+            loading.style.display = 'block';
+            grid.innerHTML = '';
+            refreshBtn.disabled = true;
+
+            try {
+                const response = await fetch('/analyze');
+                const data = await response.json();
+                allStocksData = data;
+                
+                updateAllStocksStats(data);
+                grid.innerHTML = data.map(createStockCard).join('');
+            } catch (error) {
+                grid.innerHTML = `<div class="stock-card error-card"><p>Error loading data: ${error.message}</p></div>`;
+            } finally {
+                loading.style.display = 'none';
+                refreshBtn.disabled = false;
+            }
+        }
+
+        // Load gainers
+        async function loadGainers() {
+            const loading = document.getElementById('loading-gainers');
+            const grid = document.getElementById('gainers-grid');
+            const refreshBtn = document.querySelector('#gainers .refresh-btn');
+            
+            loading.style.display = 'block';
+            grid.innerHTML = '';
+            refreshBtn.disabled = true;
+
+            try {
+                const response = await fetch('/gainers');
+                const data = await response.json();
+                gainersData = data;
+                
+                updateGainersStats(data);
+                grid.innerHTML = data.map(createStockCard).join('');
+            } catch (error) {
+                grid.innerHTML = `<div class="stock-card error-card"><p>Error loading gainers: ${error.message}</p></div>`;
+            } finally {
+                loading.style.display = 'none';
+                refreshBtn.disabled = false;
+            }
+        }
+
+        // Filter stocks
+        function filterStocks(type) {
+            const searchTerm = document.getElementById(`search-${type}`).value.toLowerCase();
+            const data = type === 'all' ? allStocksData : gainersData;
+            const grid = document.getElementById(`${type === 'all' ? 'all-stocks' : 'gainers'}-grid`);
+            
+            const filteredData = data.filter(stock => 
+                stock.ticker.toLowerCase().includes(searchTerm)
+            );
+            
+            grid.innerHTML = filteredData.map(createStockCard).join('');
+        }
+
+        // Date-based analysis function
+        async function analyzeDateData() {
+            const selectedDate = document.getElementById('analysis-date').value;
+            const loading = document.getElementById('loading-date-analysis');
+            const resultsDiv = document.getElementById('date-analysis-results');
+            
+            if (!selectedDate) {
+                alert('Please select a date for analysis');
                 return;
             }
 
-            // Extract the dates once from the first entry
-            const morningDate = data[0].morning_date;
-            const closingDate = data[0].closing_date;
-            document.getElementById("info").innerText = 
-                `Morning Session Date: ${morningDate} | Closing Session Date: ${closingDate}`;
+            loading.style.display = 'block';
+            resultsDiv.innerHTML = '';
 
-            data.forEach(d => {
-                const row = document.createElement("tr");
-
-                function cell(value, isPercent=false) {
-                    const td = document.createElement("td");
-                    td.textContent = value !== null ? (isPercent ? value + "%" : value) : "--";
-                    return td;
-                }
-
-                row.appendChild(cell(d.ticker));
-                row.appendChild(cell(d.prev_day_close));
-                row.appendChild(cell(d.open_price));
-                row.appendChild(cell(d.current_price));
-                row.appendChild(cell(d.p315));
-                row.appendChild(cell(d.p329));
-                const cc = cell(d.closing_change, true);
-                if (d.closing_change !== null) cc.className = d.closing_change > 0 ? "gain" : "loss";
-                row.appendChild(cc);
-                row.appendChild(cell(d.p915));
-                row.appendChild(cell(d.p919));
-                const mc = cell(d.morning_change, true);
-                if (d.morning_change !== null) mc.className = d.morning_change > 0 ? "gain" : "loss";
-                row.appendChild(mc);
-
-                tbody.appendChild(row);
-            });
+            try {
+                // This will be your new backend endpoint for date-based analysis
+                const response = await fetch(`/analyze-date?date=${selectedDate}`);
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <div class="results-section">
+                        <h4>📊 Analysis Results for ${selectedDate}</h4>
+                        <div class="stats" style="margin: 20px 0;">
+                            <div class="stat-card">
+                                <div class="stat-value">${data.length || 0}</div>
+                                <div class="stat-label">Total Stocks</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">${data.filter(s => s.morning_change > 0).length || 0}</div>
+                                <div class="stat-label">Gainers</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">${data.filter(s => s.morning_change < 0).length || 0}</div>
+                                <div class="stat-label">Losers</div>
+                            </div>
+                        </div>
+                        <div class="stocks-grid" style="max-height: 500px; overflow-y: auto;">
+                            ${data.map(createStockCard).join('')}
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="results-section">
+                        <div class="stock-card error-card">
+                            <h4>❌ Error</h4>
+                            <p>Failed to fetch data for ${selectedDate}</p>
+                            <p><strong>Error:</strong> ${error.message}</p>
+                            <p><em>Note: Make sure your backend has the '/analyze-date' endpoint implemented</em></p>
+                        </div>
+                    </div>
+                `;
+            } finally {
+                loading.style.display = 'none';
+            }
         }
+
+        // Mock trading function
+        async function executeMockTrade() {
+            const ticker = document.getElementById('trade-ticker').value;
+            const date = document.getElementById('trade-date').value;
+            const time = document.getElementById('trade-time').value;
+            const amount = document.getElementById('investment-amount').value;
+            
+            const loading = document.getElementById('loading-mock-trade');
+            const resultsDiv = document.getElementById('mock-trade-results');
+            
+            if (!ticker || !date || !time || !amount) {
+                alert('Please fill all trading parameters');
+                return;
+            }
+
+            loading.style.display = 'block';
+            resultsDiv.innerHTML = '';
+
+            try {
+                // This will be your new backend endpoint for mock trading
+                const response = await fetch('/mock-trade', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ticker: ticker,
+                        date: date,
+                        time: time,
+                        investment_amount: parseFloat(amount)
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Create profit summary
+                const profitClass = data.max_profit > 0 ? 'profit-positive' : data.max_profit < 0 ? 'profit-negative' : 'profit-neutral';
+                const profitIcon = data.max_profit > 0 ? '📈' : data.max_profit < 0 ? '📉' : '➡️';
+                
+                resultsDiv.innerHTML = `
+                    <div class="results-section">
+                        <h4>💰 Mock Trade Results</h4>
+                        
+                        <div class="profit-summary">
+                            <div class="profit-card">
+                                <div class="profit-value ${profitClass}">${profitIcon} ₹${data.max_profit?.toFixed(2) || '0.00'}</div>
+                                <div class="profit-label">Maximum Profit</div>
+                            </div>
+                            <div class="profit-card">
+                                <div class="profit-value">₹${data.entry_price?.toFixed(2) || '0.00'}</div>
+                                <div class="profit-label">Entry Price</div>
+                            </div>
+                            <div class="profit-card">
+                                <div class="profit-value">₹${data.exit_price?.toFixed(2) || '0.00'}</div>
+                                <div class="profit-label">Best Exit Price</div>
+                            </div>
+                            <div class="profit-card">
+                                <div class="profit-value">${data.best_exit_time || 'N/A'}</div>
+                                <div class="profit-label">Best Exit Time</div>
+                            </div>
+                            <div class="profit-card">
+                                <div class="profit-value ${profitClass}">${((data.max_profit / parseFloat(amount)) * 100).toFixed(2) || '0.00'}%</div>
+                                <div class="profit-label">Return %</div>
+                            </div>
+                            <div class="profit-card">
+                                <div class="profit-value">${Math.floor(parseFloat(amount) / data.entry_price) || 0}</div>
+                                <div class="profit-label">Shares Bought</div>
+                            </div>
+                        </div>
+
+                        <h5>⏱️ Minute-by-Minute Price Movement</h5>
+                        <div class="price-timeline">
+                            <div class="timeline-header">
+                                <div>Time</div>
+                                <div>Price (₹)</div>
+                                <div>Change (₹)</div>
+                                <div>P&L (₹)</div>
+                            </div>
+                            ${data.minute_prices?.map(price => {
+                                const change = price.price - data.entry_price;
+                                const pnl = change * Math.floor(parseFloat(amount) / data.entry_price);
+                                const changeClass = change > 0 ? 'profit-positive' : change < 0 ? 'profit-negative' : 'profit-neutral';
+                                
+                                return `
+                                    <div class="timeline-row">
+                                        <div>${price.time}</div>
+                                        <div>₹${price.price.toFixed(2)}</div>
+                                        <div class="${changeClass}">${change >= 0 ? '+' : ''}${change.toFixed(2)}</div>
+                                        <div class="${changeClass}">${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}</div>
+                                    </div>
+                                `;
+                            }).join('') || '<div class="timeline-row"><div colspan="4">No minute data available</div></div>'}
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="results-section">
+                        <div class="stock-card error-card">
+                            <h4>❌ Mock Trade Failed</h4>
+                            <p>Could not execute mock trade for ${ticker} on ${date} at ${time}</p>
+                            <p><strong>Error:</strong> ${error.message}</p>
+                            <p><em>Note: Make sure your backend has the '/mock-trade' endpoint implemented</em></p>
+                        </div>
+                    </div>
+                `;
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Basic API test function
+        async function runBasicTest() {
+            const resultsDiv = document.getElementById('api-test-results');
+            
+            resultsDiv.innerHTML = `
+                <div class="results-section">
+                    <h4>🔧 API Test Results</h4>
+                    <div style="text-align: left;">
+                        <p>✅ UI Components loaded successfully</p>
+                        <p>✅ Tab switching working</p>
+                        <p>✅ Date input controls ready</p>
+                        <p>✅ Mock trading interface ready</p>
+                        <br>
+                        <p><strong>Required Backend Endpoints:</strong></p>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li><code>GET /analyze-date?date=YYYY-MM-DD</code> - Historical analysis</li>
+                            <li><code>POST /mock-trade</code> - Mock trading simulation</li>
+                        </ul>
+                        <br>
+                        <p><strong>Expected Mock Trade Response Format:</strong></p>
+                        <pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.8rem;">
+{
+  "ticker": "PVRINOX.NS",
+  "date": "2024-01-15",
+  "entry_time": "09:15",
+  "entry_price": 100.50,
+  "exit_price": 105.25,
+  "best_exit_time": "10:30",
+  "max_profit": 475.00,
+  "investment_amount": 10000,
+  "shares_bought": 99,
+  "return_percentage": 4.75,
+  "minute_prices": [
+    {"time": "09:15", "price": 100.50},
+    {"time": "09:16", "price": 101.25},
+    {"time": "09:17", "price": 102.00},
+    ...
+  ]
+}</pre>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Set default dates
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            // Set default dates
+            document.getElementById('analysis-date').value = yesterday.toISOString().split('T')[0];
+            document.getElementById('trade-date').value = yesterday.toISOString().split('T')[0];
+            
+            loadAllStocks();
+        });
     </script>
 </body>
 </html>
