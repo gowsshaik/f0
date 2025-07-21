@@ -36,93 +36,82 @@ TICKERS = [
     "UNIONBANK.NS", "UPL.NS", "VEDL.NS", "VOLTAS.NS", "WHIRLPOOL.NS", "WIPRO.NS", "ZEEL.NS"
 ]
 
-# Constants
-INDIA_TZ = pytz.timezone("Asia/Kolkata")
-INDIAN_HOLIDAYS = holidays.country_holidays("IN")
+IST = pytz.timezone('Asia/Kolkata')
 
-def is_trading_day(date):
-    return date.weekday() < 5 and date not in INDIAN_HOLIDAYS
+# Helper functions
 
-def get_last_trading_day(start_date=None):
-    date = start_date or datetime.now(INDIA_TZ).date()
-    while not is_trading_day(date):
-        date -= timedelta(days=1)
-    return date
+def get_previous_n_working_days(n):
+    today = datetime.now(IST).date()
+    days = []
+    while len(days) < n:
+        today -= timedelta(days=1)
+        if today.weekday() < 5:
+            days.append(today)
+    return days
 
-def get_session_data(ticker):
-    today = get_last_trading_day()
-    prev_day = get_last_trading_day(today - timedelta(days=1))
-    results = {}
-
+def get_data(ticker):
     try:
-        df = yf.Ticker(ticker).history(start=str(today), interval="1m")
-        p915 = df.loc[f"{today} 09:15:00"]['Close']
-        p919 = df.loc[f"{today} 09:19:00"]['Close']
-        results.update({
+        now = datetime.now(IST)
+        prev_days = get_previous_n_working_days(3)
+        today = now.date()
+        yesterday = prev_days[0]
+        day_before = prev_days[1]
+
+        hist = yf.Ticker(ticker).history(period="5d", interval="1m")
+
+        def extract_price(date, time_str):
+            dt = f"{date} {time_str}"
+            return round(hist.loc[dt]['Close'], 2) if dt in hist.index else None
+
+        p915 = extract_price(today, '09:15:00')
+        p919 = extract_price(today, '09:19:00')
+
+        p315 = extract_price(day_before, '15:15:00')
+        p329 = extract_price(day_before, '15:29:00')
+
+        morning_change = round(((p919 - p915)/p915)*100, 2) if p915 and p919 else None
+        closing_change = round(((p329 - p315)/p315)*100, 2) if p315 and p329 else None
+
+        return {
+            "ticker": ticker,
             "morning_date": str(today),
-            "p915": round(p915, 2),
-            "p919": round(p919, 2),
-            "morning_change": round((p919 - p915) / p915 * 100, 2)
-        })
-    except:
-        results.update({"p915": None, "p919": None, "morning_change": None, "morning_date": str(today)})
+            "p915": p915,
+            "p919": p919,
+            "morning_change": morning_change,
+            "closing_date": str(day_before),
+            "p315": p315,
+            "p329": p329,
+            "closing_change": closing_change
+        }
+    except Exception as e:
+        return {
+            "ticker": ticker,
+            "error": str(e)
+        }
 
-    try:
-        df = yf.Ticker(ticker).history(start=str(prev_day), end=str(prev_day + timedelta(days=1)), interval="1m")
-        p315 = df.loc[f"{prev_day} 15:15:00"]['Close']
-        p329 = df.loc[f"{prev_day} 15:29:00"]['Close']
-        results.update({
-            "closing_date": str(prev_day),
-            "p315": round(p315, 2),
-            "p329": round(p329, 2),
-            "closing_change": round((p329 - p315) / p315 * 100, 2)
-        })
-    except:
-        results.update({"p315": None, "p329": None, "closing_change": None, "closing_date": str(prev_day)})
-
-    results["ticker"] = ticker
+# Multithread wrapper
+def get_all_tickers_data():
+    with ThreadPoolExecutor(max_workers=30) as executor:
+        results = list(executor.map(get_data, tickers_list))
     return results
 
-# Flask App
-app = Flask(__name__)
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-@app.route('/analyze')
+@app.route("/analyze")
 def analyze():
-    results = []
+    data = get_all_tickers_data()
+    sorted_data = sorted(data, key=lambda x: x.get("morning_change") or 0, reverse=True)
+    return jsonify(sorted_data)
 
-    # Use a thread pool with 20 workers (can adjust based on system/network)
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        future_to_ticker = {executor.submit(get_session_data, ticker): ticker for ticker in TICKERS}
-        for future in as_completed(future_to_ticker):
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                print(f"Error with {future_to_ticker[future]}: {e}")
-                
-    results.sort(key=lambda x: x['morning_change'] if x['morning_change'] is not None else -999, reverse=True)
-    return jsonify(results)
-
-@app.route('/gainers')
+@app.route("/gainers")
 def gainers():
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [executor.submit(get_session_data, t) for t in TICKERS]
-        results = [f.result() for f in futures]
-
-    # ✅ Filter: morning ≥ 2% and abs(closing) < 2%
-    filtered = [
-        r for r in results
-        if r["morning_change"] is not None and r["morning_change"] >= 2
-        and (r["closing_change"] is None or abs(r["closing_change"]) < 2)
-    ]
-
-    return jsonify(filtered)
+    data = get_all_tickers_data()
+    filtered = [d for d in data if d.get("morning_change") and d["morning_change"] >= 2 \
+                and (d.get("closing_change") is None or abs(d["closing_change"]) < 2)]
+    sorted_filtered = sorted(filtered, key=lambda x: x.get("morning_change") or 0, reverse=True)
+    return jsonify(sorted_filtered)
 
 import os
 
