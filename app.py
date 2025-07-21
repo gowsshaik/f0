@@ -4,6 +4,7 @@ from flask import Flask, jsonify, render_template
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import pytz
+import holidays
 app = Flask(__name__)
 # Ticker List
 TICKERS = [
@@ -35,54 +36,73 @@ TICKERS = [
     "TITAN.NS", "TORNTPHARM.NS", "TORNTPOWER.NS", "TRENT.NS", "TVSMOTOR.NS", "UBL.NS", "ULTRACEMCO.NS",
     "UNIONBANK.NS", "UPL.NS", "VEDL.NS", "VOLTAS.NS", "WHIRLPOOL.NS", "WIPRO.NS", "ZEEL.NS"
 ]
-
+# TICKERS = ["PVRINOX.NS"]
 IST = pytz.timezone('Asia/Kolkata')
+IN_HOLIDAYS = holidays.India()
 
 # Helper functions
 
-def get_previous_n_working_days(n):
+def get_last_two_working_days():
     today = datetime.now(IST).date()
+    # Go back from today until we find 2 valid market days
     days = []
-    while len(days) < n:
+    while len(days) < 2:
+        if today.weekday() < 5 and today not in IN_HOLIDAYS:
+            days.insert(0, today)
         today -= timedelta(days=1)
-        if today.weekday() < 5:
-            days.append(today)
-    return days
+    return days  # [previous_working_day, latest_working_day]
+
 
 def get_data(ticker):
     try:
         now = datetime.now(IST)
-        prev_days = get_previous_n_working_days(3)
-        today = now.date()
-        yesterday = prev_days[0]
-        day_before = prev_days[1]
-
+        previous_day, latest_day = get_last_two_working_days()
         hist = yf.Ticker(ticker).history(period="5d", interval="1m")
-
-        def extract_price(date, time_str):
+        def extract_open_price(date, time_str):
+            dt = f"{date} {time_str}"
+            return round(hist.loc[dt]['Open'], 2) if dt in hist.index else None
+        def extract_close_price(date, time_str):
             dt = f"{date} {time_str}"
             return round(hist.loc[dt]['Close'], 2) if dt in hist.index else None
+        def extract_day_open(date):
+            opens = hist.between_time('09:15', '09:45')
+            day_data = opens[opens.index.date == date]
+            return round(day_data.iloc[0]['Open'], 2) if not day_data.empty else None
 
-        p915 = extract_price(today, '09:15:00')
-        p919 = extract_price(today, '09:19:00')
+        def extract_day_close(date):
+            closes = hist.between_time('15:25', '15:30')
+            day_data = closes[closes.index.date == date]
+            return round(day_data.iloc[-1]['Close'], 2) if not day_data.empty else None
 
-        p315 = extract_price(day_before, '15:15:00')
-        p329 = extract_price(day_before, '15:29:00')
+        p915 = extract_open_price(latest_day, '09:15:00')
+        p919 = extract_close_price(latest_day, '09:19:00')
+
+        p315 = extract_open_price(previous_day, '15:15:00')
+        p329 = extract_close_price(previous_day, '15:29:00')
+
+        # Additional values
+        open_price = extract_day_open(latest_day)
+        prev_close = extract_day_close(previous_day)
+        current_price = extract_close_price(latest_day, '09:18:00')  # You can change this
 
         morning_change = round(((p919 - p915)/p915)*100, 2) if p915 and p919 else None
         closing_change = round(((p329 - p315)/p315)*100, 2) if p315 and p329 else None
 
         return {
             "ticker": ticker,
-            "morning_date": str(today),
+            "morning_date": str(latest_day),
             "p915": p915,
             "p919": p919,
             "morning_change": morning_change,
-            "closing_date": str(day_before),
+            "closing_date": str(previous_day),
             "p315": p315,
             "p329": p329,
-            "closing_change": closing_change
+            "closing_change": closing_change,
+            "open_price": open_price,
+            "prev_day_close": prev_close,
+            "current_price": current_price
         }
+
     except Exception as e:
         return {
             "ticker": ticker,
@@ -118,4 +138,3 @@ import os
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
-
