@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pytz
 import holidays
 from flask import Flask, request, jsonify, render_template
-
+app = Flask(__name__)
 # Ticker List
 TICKERS = [
     "360ONE.NS", "ABB.NS", "ACC.NS", "APLAPOLLO.NS", "ADANIENT.NS", "ADANIPORTS.NS", "AMBUJACEM.NS",
