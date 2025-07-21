@@ -105,8 +105,24 @@ def analyze():
                 results.append(result)
             except Exception as e:
                 print(f"Error with {future_to_ticker[future]}: {e}")
-
+                
+    results.sort(key=lambda x: x['morning_change'] if x['morning_change'] is not None else -999, reverse=True)
     return jsonify(results)
+
+@app.route('/gainers')
+def gainers():
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(get_session_data, t) for t in TICKERS]
+        results = [f.result() for f in futures]
+
+    # ✅ Filter: morning ≥ 2% and abs(closing) < 2%
+    filtered = [
+        r for r in results
+        if r["morning_change"] is not None and r["morning_change"] >= 2
+        and (r["closing_change"] is None or abs(r["closing_change"]) < 2)
+    ]
+
+    return jsonify(filtered)
 
 import os
 
