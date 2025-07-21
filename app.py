@@ -1,9 +1,9 @@
 import yfinance as yf
 import pandas as pd
+from flask import Flask, jsonify, render_template
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import pytz
-import holidays
-from flask import Flask, request, jsonify, render_template
 app = Flask(__name__)
 # Ticker List
 TICKERS = [
