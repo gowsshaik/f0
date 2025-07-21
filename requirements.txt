@@ -4,3 +4,4 @@ pandas
 numpy
 holidays
 pytz
+holidays
