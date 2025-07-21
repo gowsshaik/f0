@@ -92,7 +92,7 @@ def get_data(ticker):
 # Multithread wrapper
 def get_all_tickers_data():
     with ThreadPoolExecutor(max_workers=30) as executor:
-        results = list(executor.map(get_data, tickers_list))
+        results = list(executor.map(get_data, TICKERS))
     return results
 
 @app.route("/")
