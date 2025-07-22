@@ -8,37 +8,193 @@ import holidays
 
 app = Flask(__name__)
 
-# Ticker List
-TICKERS = [
-    "360ONE.NS", "ABB.NS", "ACC.NS", "APLAPOLLO.NS", "ADANIENT.NS", "ADANIPORTS.NS", "AMBUJACEM.NS",
-    "AMBER.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS", "ASTRAL.NS", "AUBANK.NS", "AUROPHARMA.NS",
-    "AXISBANK.NS", "BAJAJ-AUTO.NS", "BAJFINANCE.NS", "BAJAJFINSV.NS", "BALKRISIND.NS", "BANDHANBNK.NS",
-    "BANKBARODA.NS", "BATAINDIA.NS", "BEL.NS", "BHARATFORG.NS", "BHARTIARTL.NS", "BIOCON.NS",
-    "BOSCHLTD.NS", "BRITANNIA.NS", "CADILAHC.NS", "CANBK.NS", "CASTROLIND.NS", "CHAMBLFERT.NS",
-    "CHOLAFIN.NS", "CIPLA.NS", "CUB.NS", "COALINDIA.NS", "COFORGE.NS", "COLPAL.NS", "CONCOR.NS",
-    "COROMANDEL.NS", "CROMPTON.NS", "CUMMINSIND.NS", "DALBHARAT.NS", "DLF.NS", "DIXON.NS",
-    "DIVISLAB.NS", "LALPATHLAB.NS", "DRREDDY.NS", "EICHERMOT.NS", "ESCORTS.NS", "FEDERALBNK.NS",
-    "FORTIS.NS", "GAIL.NS", "GLAND.NS", "GLENMARK.NS", "GODREJCP.NS", "GODREJPROP.NS", "GRANULES.NS",
-    "GRASIM.NS", "GUJGASLTD.NS", "GSPL.NS", "HCLTECH.NS", "HDFCAMC.NS", "HDFCBANK.NS", "HDFCLIFE.NS",
-    "HEROMOTOCO.NS", "HINDALCO.NS", "HAL.NS", "HINDCOPPER.NS", "HINDPETRO.NS", "HINDUNILVR.NS",
-    "HINDZINC.NS", "ICICIBANK.NS", "ICICIGI.NS", "ICICIPRULI.NS", "IDFCFIRSTB.NS", "IEX.NS", "IGL.NS",
-    "INDIACEM.NS", "INDIAMART.NS", "INDHOTEL.NS", "IOC.NS", "INDUSINDBK.NS", "NAUKRI.NS", "INFY.NS",
-    "INTELLECT.NS", "INDIGO.NS", "IPCALAB.NS", "IRCTC.NS", "ITC.NS", "JKCEMENT.NS", "JINDALSTEL.NS",
-    "JSWSTEEL.NS", "JUBLFOOD.NS", "KAJARIACER.NS", "KANSAINER.NS", "KEC.NS", "KOTAKBANK.NS", "L&TFH.NS",
-    "LTTS.NS", "LICHSGFIN.NS", "LT.NS", "LUPIN.NS", "MANAPPURAM.NS", "MARICO.NS", "MARUTI.NS",
-    "MCDOWELL-N.NS", "MCX.NS", "METROPOLIS.NS", "MFSL.NS", "MGL.NS", "M&M.NS", "M&MFIN.NS",
-    "MNGL.NS", "MPHASIS.NS", "MRF.NS", "MUTHOOTFIN.NS", "NAM-INDIA.NS", "NATIONALUM.NS",
-    "NAVINFLUOR.NS", "NCC.NS", "NESTLEIND.NS", "NMDC.NS", "NTPC.NS", "OBEROIRLTY.NS", "OFSS.NS",
-    "ONGC.NS", "PAGEIND.NS", "PEL.NS", "PERSISTENT.NS", "PETRONET.NS", "PFC.NS", "PIDILITIND.NS",
-    "PIIND.NS", "PNB.NS", "POLYCAB.NS", "POWERGRID.NS", "PRAJIND.NS", "PRESTIGE.NS", "PVRINOX.NS",
-    "RAMCOCEM.NS", "RBLBANK.NS", "RECLTD.NS", "RELIANCE.NS", "SAIL.NS", "SBICARD.NS", "SBILIFE.NS",
-    "SBIN.NS", "SCHAEFFLER.NS", "SHREECEM.NS", "SHRIRAMFIN.NS", "SIEMENS.NS", "SRF.NS", "SRTRANSFIN.NS",
-    "SUNPHARMA.NS", "SUNTV.NS", "SUPRAJIT.NS", "SYNGENE.NS", "TATACHEM.NS", "TATACOMM.NS",
-    "TATACONSUM.NS", "TATAMOTORS.NS", "TATAPOWER.NS", "TATASTEEL.NS", "TCS.NS", "TECHM.NS",
-    "TITAN.NS", "TORNTPHARM.NS", "TORNTPOWER.NS", "TRENT.NS", "TVSMOTOR.NS", "UBL.NS", "ULTRACEMCO.NS",
-    "UNIONBANK.NS", "UNIONBANK.NS", "UPL.NS", "VEDL.NS", "VOLTAS.NS", "WHIRLPOOL.NS", "WIPRO.NS", "ZEEL.NS"
-]
-# TICKERS=['PVRINOX.NS']
+# Ticker List with Company Names and Sectors
+TICKER_INFO = {
+    "360ONE.NS": {"company": "360 ONE WAM Ltd", "sector": "Financial Services"},
+    "ABB.NS": {"company": "ABB India Ltd", "sector": "Capital Goods"},
+    "ACC.NS": {"company": "ACC Ltd", "sector": "Cement & Cement Products"},
+    "APLAPOLLO.NS": {"company": "APL Apollo Tubes Ltd", "sector": "Metal Products"},
+    "ADANIENT.NS": {"company": "Adani Enterprises Ltd", "sector": "Trading"},
+    "ADANIPORTS.NS": {"company": "Adani Ports & Special Economic Zone Ltd", "sector": "Services"},
+    "AMBUJACEM.NS": {"company": "Ambuja Cements Ltd", "sector": "Cement & Cement Products"},
+    "AMBER.NS": {"company": "Amber Enterprises India Ltd", "sector": "Consumer Durables"},
+    "APOLLOHOSP.NS": {"company": "Apollo Hospitals Enterprise Ltd", "sector": "Healthcare Services"},
+    "ASIANPAINT.NS": {"company": "Asian Paints Ltd", "sector": "Consumer Goods"},
+    "ASTRAL.NS": {"company": "Astral Ltd", "sector": "Capital Goods"},
+    "AUBANK.NS": {"company": "AU Small Finance Bank Ltd", "sector": "Financial Services"},
+    "AUROPHARMA.NS": {"company": "Aurobindo Pharma Ltd", "sector": "Pharmaceuticals"},
+    "AXISBANK.NS": {"company": "Axis Bank Ltd", "sector": "Financial Services"},
+    "BAJAJ-AUTO.NS": {"company": "Bajaj Auto Ltd", "sector": "Automobile and Auto Components"},
+    "BAJFINANCE.NS": {"company": "Bajaj Finance Ltd", "sector": "Financial Services"},
+    "BAJAJFINSV.NS": {"company": "Bajaj Finserv Ltd", "sector": "Financial Services"},
+    "BALKRISIND.NS": {"company": "Balkrishna Industries Ltd", "sector": "Automobile and Auto Components"},
+    "BANDHANBNK.NS": {"company": "Bandhan Bank Ltd", "sector": "Financial Services"},
+    "BANKBARODA.NS": {"company": "Bank of Baroda", "sector": "Financial Services"},
+    "BATAINDIA.NS": {"company": "Bata India Ltd", "sector": "Consumer Goods"},
+    "BEL.NS": {"company": "Bharat Electronics Ltd", "sector": "Capital Goods"},
+    "BHARATFORG.NS": {"company": "Bharat Forge Ltd", "sector": "Automobile and Auto Components"},
+    "BHARTIARTL.NS": {"company": "Bharti Airtel Ltd", "sector": "Telecommunication"},
+    "BIOCON.NS": {"company": "Biocon Ltd", "sector": "Pharmaceuticals"},
+    "BOSCHLTD.NS": {"company": "Bosch Ltd", "sector": "Automobile and Auto Components"},
+    "BRITANNIA.NS": {"company": "Britannia Industries Ltd", "sector": "FMCG"},
+    "CADILAHC.NS": {"company": "Cadila Healthcare Ltd", "sector": "Pharmaceuticals"},
+    "CANBK.NS": {"company": "Canara Bank", "sector": "Financial Services"},
+    "CASTROLIND.NS": {"company": "Castrol India Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "CHAMBLFERT.NS": {"company": "Chambal Fertilisers & Chemicals Ltd", "sector": "Fertilizers & Agrochemicals"},
+    "CHOLAFIN.NS": {"company": "Cholamandalam Investment and Finance Company Ltd", "sector": "Financial Services"},
+    "CIPLA.NS": {"company": "Cipla Ltd", "sector": "Pharmaceuticals"},
+    "CUB.NS": {"company": "City Union Bank Ltd", "sector": "Financial Services"},
+    "COALINDIA.NS": {"company": "Coal India Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "COFORGE.NS": {"company": "Coforge Ltd", "sector": "Information Technology"},
+    "COLPAL.NS": {"company": "Colgate Palmolive (India) Ltd", "sector": "FMCG"},
+    "CONCOR.NS": {"company": "Container Corporation of India Ltd", "sector": "Services"},
+    "COROMANDEL.NS": {"company": "Coromandel International Ltd", "sector": "Fertilizers & Agrochemicals"},
+    "CROMPTON.NS": {"company": "Crompton Greaves Consumer Electricals Ltd", "sector": "Consumer Durables"},
+    "CUMMINSIND.NS": {"company": "Cummins India Ltd", "sector": "Capital Goods"},
+    "DALBHARAT.NS": {"company": "Dalmia Bharat Ltd", "sector": "Cement & Cement Products"},
+    "DLF.NS": {"company": "DLF Ltd", "sector": "Realty"},
+    "DIXON.NS": {"company": "Dixon Technologies (India) Ltd", "sector": "Consumer Durables"},
+    "DIVISLAB.NS": {"company": "Divi's Laboratories Ltd", "sector": "Pharmaceuticals"},
+    "LALPATHLAB.NS": {"company": "Dr. Lal PathLabs Ltd", "sector": "Healthcare Services"},
+    "DRREDDY.NS": {"company": "Dr. Reddy's Laboratories Ltd", "sector": "Pharmaceuticals"},
+    "EICHERMOT.NS": {"company": "Eicher Motors Ltd", "sector": "Automobile and Auto Components"},
+    "ESCORTS.NS": {"company": "Escorts Kubota Ltd", "sector": "Capital Goods"},
+    "FEDERALBNK.NS": {"company": "Federal Bank Ltd", "sector": "Financial Services"},
+    "FORTIS.NS": {"company": "Fortis Healthcare Ltd", "sector": "Healthcare Services"},
+    "GAIL.NS": {"company": "GAIL (India) Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "GLAND.NS": {"company": "Gland Pharma Ltd", "sector": "Pharmaceuticals"},
+    "GLENMARK.NS": {"company": "Glenmark Pharmaceuticals Ltd", "sector": "Pharmaceuticals"},
+    "GODREJCP.NS": {"company": "Godrej Consumer Products Ltd", "sector": "FMCG"},
+    "GODREJPROP.NS": {"company": "Godrej Properties Ltd", "sector": "Realty"},
+    "GRANULES.NS": {"company": "Granules India Ltd", "sector": "Pharmaceuticals"},
+    "GRASIM.NS": {"company": "Grasim Industries Ltd", "sector": "Cement & Cement Products"},
+    "GUJGASLTD.NS": {"company": "Gujarat Gas Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "GSPL.NS": {"company": "Gujarat State Petronet Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "HCLTECH.NS": {"company": "HCL Technologies Ltd", "sector": "Information Technology"},
+    "HDFCAMC.NS": {"company": "HDFC Asset Management Company Ltd", "sector": "Financial Services"},
+    "HDFCBANK.NS": {"company": "HDFC Bank Ltd", "sector": "Financial Services"},
+    "HDFCLIFE.NS": {"company": "HDFC Life Insurance Company Ltd", "sector": "Financial Services"},
+    "HEROMOTOCO.NS": {"company": "Hero MotoCorp Ltd", "sector": "Automobile and Auto Components"},
+    "HINDALCO.NS": {"company": "Hindalco Industries Ltd", "sector": "Metals & Mining"},
+    "HAL.NS": {"company": "Hindustan Aeronautics Ltd", "sector": "Capital Goods"},
+    "HINDCOPPER.NS": {"company": "Hindustan Copper Ltd", "sector": "Metals & Mining"},
+    "HINDPETRO.NS": {"company": "Hindustan Petroleum Corporation Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "HINDUNILVR.NS": {"company": "Hindustan Unilever Ltd", "sector": "FMCG"},
+    "HINDZINC.NS": {"company": "Hindustan Zinc Ltd", "sector": "Metals & Mining"},
+    "ICICIBANK.NS": {"company": "ICICI Bank Ltd", "sector": "Financial Services"},
+    "ICICIGI.NS": {"company": "ICICI Lombard General Insurance Company Ltd", "sector": "Financial Services"},
+    "ICICIPRULI.NS": {"company": "ICICI Prudential Life Insurance Company Ltd", "sector": "Financial Services"},
+    "IDFCFIRSTB.NS": {"company": "IDFC First Bank Ltd", "sector": "Financial Services"},
+    "IEX.NS": {"company": "Indian Energy Exchange Ltd", "sector": "Financial Services"},
+    "IGL.NS": {"company": "Indraprastha Gas Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "INDIACEM.NS": {"company": "The India Cements Ltd", "sector": "Cement & Cement Products"},
+    "INDIAMART.NS": {"company": "IndiaMART InterMESH Ltd", "sector": "Consumer Services"},
+    "INDHOTEL.NS": {"company": "The Indian Hotels Company Ltd", "sector": "Consumer Services"},
+    "IOC.NS": {"company": "Indian Oil Corporation Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "INDUSINDBK.NS": {"company": "IndusInd Bank Ltd", "sector": "Financial Services"},
+    "NAUKRI.NS": {"company": "Info Edge (India) Ltd", "sector": "Consumer Services"},
+    "INFY.NS": {"company": "Infosys Ltd", "sector": "Information Technology"},
+    "INTELLECT.NS": {"company": "Intellect Design Arena Ltd", "sector": "Information Technology"},
+    "INDIGO.NS": {"company": "InterGlobe Aviation Ltd", "sector": "Services"},
+    "IPCALAB.NS": {"company": "IPCA Laboratories Ltd", "sector": "Pharmaceuticals"},
+    "IRCTC.NS": {"company": "Indian Railway Catering And Tourism Corporation Ltd", "sector": "Consumer Services"},
+    "ITC.NS": {"company": "ITC Ltd", "sector": "FMCG"},
+    "JKCEMENT.NS": {"company": "JK Cement Ltd", "sector": "Cement & Cement Products"},
+    "JINDALSTEL.NS": {"company": "Jindal Steel & Power Ltd", "sector": "Metals & Mining"},
+    "JSWSTEEL.NS": {"company": "JSW Steel Ltd", "sector": "Metals & Mining"},
+    "JUBLFOOD.NS": {"company": "Jubilant Foodworks Ltd", "sector": "Consumer Services"},
+    "KAJARIACER.NS": {"company": "Kajaria Ceramics Ltd", "sector": "Consumer Durables"},
+    "KANSAINER.NS": {"company": "Kansai Nerolac Paints Ltd", "sector": "Consumer Goods"},
+    "KEC.NS": {"company": "KEC International Ltd", "sector": "Capital Goods"},
+    "KOTAKBANK.NS": {"company": "Kotak Mahindra Bank Ltd", "sector": "Financial Services"},
+    "L&TFH.NS": {"company": "L&T Finance Holdings Ltd", "sector": "Financial Services"},
+    "LTTS.NS": {"company": "L&T Technology Services Ltd", "sector": "Information Technology"},
+    "LICHSGFIN.NS": {"company": "LIC Housing Finance Ltd", "sector": "Financial Services"},
+    "LT.NS": {"company": "Larsen & Toubro Ltd", "sector": "Capital Goods"},
+    "LUPIN.NS": {"company": "Lupin Ltd", "sector": "Pharmaceuticals"},
+    "MANAPPURAM.NS": {"company": "Manappuram Finance Ltd", "sector": "Financial Services"},
+    "MARICO.NS": {"company": "Marico Ltd", "sector": "FMCG"},
+    "MARUTI.NS": {"company": "Maruti Suzuki India Ltd", "sector": "Automobile and Auto Components"},
+    "MCDOWELL-N.NS": {"company": "United Spirits Ltd", "sector": "FMCG"},
+    "MCX.NS": {"company": "Multi Commodity Exchange of India Ltd", "sector": "Financial Services"},
+    "METROPOLIS.NS": {"company": "Metropolis Healthcare Ltd", "sector": "Healthcare Services"},
+    "MFSL.NS": {"company": "Max Financial Services Ltd", "sector": "Financial Services"},
+    "MGL.NS": {"company": "Mahanagar Gas Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "M&M.NS": {"company": "Mahindra & Mahindra Ltd", "sector": "Automobile and Auto Components"},
+    "M&MFIN.NS": {"company": "Mahindra & Mahindra Financial Services Ltd", "sector": "Financial Services"},
+    "MNGL.NS": {"company": "MNGL Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "MPHASIS.NS": {"company": "Mphasis Ltd", "sector": "Information Technology"},
+    "MRF.NS": {"company": "MRF Ltd", "sector": "Automobile and Auto Components"},
+    "MUTHOOTFIN.NS": {"company": "Muthoot Finance Ltd", "sector": "Financial Services"},
+    "NAM-INDIA.NS": {"company": "Nippon Life India Asset Management Ltd", "sector": "Financial Services"},
+    "NATIONALUM.NS": {"company": "National Aluminium Company Ltd", "sector": "Metals & Mining"},
+    "NAVINFLUOR.NS": {"company": "Navin Fluorine International Ltd", "sector": "Chemicals"},
+    "NCC.NS": {"company": "NCC Ltd", "sector": "Construction"},
+    "NESTLEIND.NS": {"company": "Nestle India Ltd", "sector": "FMCG"},
+    "NMDC.NS": {"company": "NMDC Ltd", "sector": "Metals & Mining"},
+    "NTPC.NS": {"company": "NTPC Ltd", "sector": "Power"},
+    "OBEROIRLTY.NS": {"company": "Oberoi Realty Ltd", "sector": "Realty"},
+    "OFSS.NS": {"company": "Oracle Financial Services Software Ltd", "sector": "Information Technology"},
+    "ONGC.NS": {"company": "Oil & Natural Gas Corporation Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "PAGEIND.NS": {"company": "Page Industries Ltd", "sector": "Textiles"},
+    "PEL.NS": {"company": "Piramal Enterprises Ltd", "sector": "Pharmaceuticals"},
+    "PERSISTENT.NS": {"company": "Persistent Systems Ltd", "sector": "Information Technology"},
+    "PETRONET.NS": {"company": "Petronet LNG Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "PFC.NS": {"company": "Power Finance Corporation Ltd", "sector": "Financial Services"},
+    "PIDILITIND.NS": {"company": "Pidilite Industries Ltd", "sector": "Chemicals"},
+    "PIIND.NS": {"company": "PI Industries Ltd", "sector": "Fertilizers & Agrochemicals"},
+    "PNB.NS": {"company": "Punjab National Bank", "sector": "Financial Services"},
+    "POLYCAB.NS": {"company": "Polycab India Ltd", "sector": "Capital Goods"},
+    "POWERGRID.NS": {"company": "Power Grid Corporation of India Ltd", "sector": "Power"},
+    "PRAJIND.NS": {"company": "Praj Industries Ltd", "sector": "Capital Goods"},
+    "PRESTIGE.NS": {"company": "Prestige Estates Projects Ltd", "sector": "Realty"},
+    "PVRINOX.NS": {"company": "PVR INOX Ltd", "sector": "Media & Entertainment"},
+    "RAMCOCEM.NS": {"company": "The Ramco Cements Ltd", "sector": "Cement & Cement Products"},
+    "RBLBANK.NS": {"company": "RBL Bank Ltd", "sector": "Financial Services"},
+    "RECLTD.NS": {"company": "REC Ltd", "sector": "Financial Services"},
+    "RELIANCE.NS": {"company": "Reliance Industries Ltd", "sector": "Oil Gas & Consumable Fuels"},
+    "SAIL.NS": {"company": "Steel Authority of India Ltd", "sector": "Metals & Mining"},
+    "SBICARD.NS": {"company": "SBI Cards and Payment Services Ltd", "sector": "Financial Services"},
+    "SBILIFE.NS": {"company": "SBI Life Insurance Company Ltd", "sector": "Financial Services"},
+    "SBIN.NS": {"company": "State Bank of India", "sector": "Financial Services"},
+    "SCHAEFFLER.NS": {"company": "Schaeffler India Ltd", "sector": "Automobile and Auto Components"},
+    "SHREECEM.NS": {"company": "Shree Cement Ltd", "sector": "Cement & Cement Products"},
+    "SHRIRAMFIN.NS": {"company": "Shriram Finance Ltd", "sector": "Financial Services"},
+    "SIEMENS.NS": {"company": "Siemens Ltd", "sector": "Capital Goods"},
+    "SRF.NS": {"company": "SRF Ltd", "sector": "Chemicals"},
+    "SRTRANSFIN.NS": {"company": "Shriram Transport Finance Company Ltd", "sector": "Financial Services"},
+    "SUNPHARMA.NS": {"company": "Sun Pharmaceutical Industries Ltd", "sector": "Pharmaceuticals"},
+    "SUNTV.NS": {"company": "Sun TV Network Ltd", "sector": "Media & Entertainment"},
+    "SUPRAJIT.NS": {"company": "Suprajit Engineering Ltd", "sector": "Automobile and Auto Components"},
+    "SYNGENE.NS": {"company": "Syngene International Ltd", "sector": "Pharmaceuticals"},
+    "TATACHEM.NS": {"company": "Tata Chemicals Ltd", "sector": "Chemicals"},
+    "TATACOMM.NS": {"company": "Tata Communications Ltd", "sector": "Telecommunication"},
+    "TATACONSUM.NS": {"company": "Tata Consumer Products Ltd", "sector": "FMCG"},
+    "TATAMOTORS.NS": {"company": "Tata Motors Ltd", "sector": "Automobile and Auto Components"},
+    "TATAPOWER.NS": {"company": "Tata Power Company Ltd", "sector": "Power"},
+    "TATASTEEL.NS": {"company": "Tata Steel Ltd", "sector": "Metals & Mining"},
+    "TCS.NS": {"company": "Tata Consultancy Services Ltd", "sector": "Information Technology"},
+    "TECHM.NS": {"company": "Tech Mahindra Ltd", "sector": "Information Technology"},
+    "TITAN.NS": {"company": "Titan Company Ltd", "sector": "Consumer Goods"},
+    "TORNTPHARM.NS": {"company": "Torrent Pharmaceuticals Ltd", "sector": "Pharmaceuticals"},
+    "TORNTPOWER.NS": {"company": "Torrent Power Ltd", "sector": "Power"},
+    "TRENT.NS": {"company": "Trent Ltd", "sector": "Consumer Services"},
+    "TVSMOTOR.NS": {"company": "TVS Motor Company Ltd", "sector": "Automobile and Auto Components"},
+    "UBL.NS": {"company": "United Breweries Ltd", "sector": "FMCG"},
+    "ULTRACEMCO.NS": {"company": "UltraTech Cement Ltd", "sector": "Cement & Cement Products"},
+    "UNIONBANK.NS": {"company": "Union Bank of India", "sector": "Financial Services"},
+    "UPL.NS": {"company": "UPL Ltd", "sector": "Fertilizers & Agrochemicals"},
+    "VEDL.NS": {"company": "Vedanta Ltd", "sector": "Metals & Mining"},
+    "VOLTAS.NS": {"company": "Voltas Ltd", "sector": "Consumer Durables"},
+    "WHIRLPOOL.NS": {"company": "Whirlpool of India Ltd", "sector": "Consumer Durables"},
+    "WIPRO.NS": {"company": "Wipro Ltd", "sector": "Information Technology"},
+    "ZEEL.NS": {"company": "Zee Entertainment Enterprises Ltd", "sector": "Media & Entertainment"}
+}
+
+# Use only PVRINOX for testing
+TICKERS = list(TICKER_INFO.keys())
+# For production, use: TICKERS = list(TICKER_INFO.keys())
+
 IST = pytz.timezone('Asia/Kolkata')
 IN_HOLIDAYS = holidays.India()
 
@@ -64,7 +220,7 @@ def get_previous_market_day(date_obj):
     return prev_date
 
 def get_data_for_date(ticker, target_date):
-    """Get stock data for a specific date - OPTIMIZED VERSION"""
+    """Get stock data for a specific date - WITH VOLUME AND COMPANY INFO"""
     try:
         target_date_obj = datetime.strptime(target_date, '%Y-%m-%d').date()
         
@@ -79,7 +235,6 @@ def get_data_for_date(ticker, target_date):
         previous_day = get_previous_market_day(target_date_obj)
         
         # Fetch historical data for only the 2 required days
-        # Start from previous day, end day after target date
         start_date = previous_day
         end_date = target_date_obj + timedelta(days=1)
         print(f"Fetching data from {start_date} to {end_date}")
@@ -92,13 +247,13 @@ def get_data_for_date(ticker, target_date):
                 "error": f"No data available for {target_date}"
             }
         
-        def extract_open_price(date, time_str):
+        def extract_price_and_volume(date, time_str, price_type='Open'):
             dt = f"{date} {time_str}"
-            return round(hist.loc[dt]['Open'], 2) if dt in hist.index else None
-        
-        def extract_close_price(date, time_str):
-            dt = f"{date} {time_str}"
-            return round(hist.loc[dt]['Close'], 2) if dt in hist.index else None
+            if dt in hist.index:
+                price = round(hist.loc[dt][price_type], 2)
+                volume = int(hist.loc[dt]['Volume'])
+                return price, volume
+            return None, None
         
         def extract_day_open(date):
             day_data = hist[hist.index.date == date]
@@ -114,33 +269,48 @@ def get_data_for_date(ticker, target_date):
                 return round(closes.iloc[-1]['Close'], 2) if not closes.empty else None
             return None
 
-        # Extract prices for target date (morning session)
-        p915 = extract_open_price(target_date_obj, '09:15:00')
-        p919 = extract_close_price(target_date_obj, '09:19:00')
+        # Extract prices and volumes for target date (morning session)
+        p915, v915 = extract_price_and_volume(target_date_obj, '09:15:00', 'Open')
+        p919, v919 = extract_price_and_volume(target_date_obj, '09:19:00', 'Close')
 
-        # Extract prices for previous market day (closing session)
-        p315 = extract_open_price(previous_day, '15:15:00')
-        p329 = extract_close_price(previous_day, '15:29:00')
+        # Extract prices and volumes for previous market day (closing session)
+        p315, v315 = extract_price_and_volume(previous_day, '15:15:00', 'Open')
+        p329, v329 = extract_price_and_volume(previous_day, '15:29:00', 'Close')
 
         # Additional values
         open_price = extract_day_open(target_date_obj)
         prev_close = extract_day_close(previous_day)
-        current_price = extract_close_price(target_date_obj, '09:18:00')
+        current_price, _ = extract_price_and_volume(target_date_obj, '09:18:00', 'Close')
 
         # Calculate changes
         morning_change = round(((p919 - p915)/p915)*100, 2) if p915 and p919 else None
         closing_change = round(((p329 - p315)/p315)*100, 2) if p315 and p329 else None
 
+        # Calculate volume changes
+        morning_volume_change = round(((v919 - v915)/v915)*100, 2) if v915 and v919 and v915 > 0 else None
+        closing_volume_change = round(((v329 - v315)/v315)*100, 2) if v315 and v329 and v315 > 0 else None
+
+        # Get company info
+        company_info = TICKER_INFO.get(ticker, {"company": "Unknown", "sector": "Unknown"})
+
         return {
             "ticker": ticker,
+            "company_name": company_info["company"],
+            "sector": company_info["sector"],
             "morning_date": str(target_date_obj),
             "p915": p915,
             "p919": p919,
+            "v915": v915,
+            "v919": v919,
             "morning_change": morning_change,
+            "morning_volume_change": morning_volume_change,
             "closing_date": str(previous_day),
             "p315": p315,
             "p329": p329,
+            "v315": v315,
+            "v329": v329,
             "closing_change": closing_change,
+            "closing_volume_change": closing_volume_change,
             "open_price": open_price,
             "prev_day_close": prev_close,
             "current_price": current_price
@@ -240,8 +410,13 @@ def execute_mock_trade_analysis(ticker, date, time, investment_amount):
                 best_exit_price = current_price
                 best_exit_time = current_time
         
+        # Get company info
+        company_info = TICKER_INFO.get(ticker, {"company": "Unknown", "sector": "Unknown"})
+        
         return {
             "ticker": ticker,
+            "company_name": company_info["company"],
+            "sector": company_info["sector"],
             "date": date,
             "entry_time": actual_entry_time,
             "entry_price": entry_price,
@@ -260,53 +435,76 @@ def execute_mock_trade_analysis(ticker, date, time, investment_amount):
         }
 
 def get_data(ticker):
-    """Original get_data function for current analysis"""
+    """Original get_data function for current analysis - WITH VOLUME AND COMPANY INFO"""
     try:
         now = datetime.now(IST)
         previous_day, latest_day = get_last_two_working_days()
         hist = yf.Ticker(ticker).history(period="7d", interval="1m")
         
-        def extract_open_price(date, time_str):
+        def extract_price_and_volume(date, time_str, price_type='Open'):
             dt = f"{date} {time_str}"
-            return round(hist.loc[dt]['Open'], 2) if dt in hist.index else None
-        
-        def extract_close_price(date, time_str):
-            dt = f"{date} {time_str}"
-            return round(hist.loc[dt]['Close'], 2) if dt in hist.index else None
+            if dt in hist.index:
+                price = round(hist.loc[dt][price_type], 2)
+                volume = int(hist.loc[dt]['Volume'])
+                return price, volume
+            return None, None
         
         def extract_day_open(date):
-            opens = hist.between_time('09:15', '09:45')
-            day_data = opens[opens.index.date == date]
-            return round(day_data.iloc[0]['Open'], 2) if not day_data.empty else None
+            day_data = hist[hist.index.date == date]
+            if not day_data.empty:
+                opens = day_data.between_time('09:15', '09:45')
+                return round(opens.iloc[0]['Open'], 2) if not opens.empty else None
+            return None
 
         def extract_day_close(date):
-            closes = hist.between_time('15:25', '15:30')
-            day_data = closes[closes.index.date == date]
-            return round(day_data.iloc[-1]['Close'], 2) if not day_data.empty else None
+            day_data = hist[hist.index.date == date]
+            if not day_data.empty:
+                closes = day_data.between_time('15:25', '15:30')
+                return round(closes.iloc[-1]['Close'], 2) if not closes.empty else None
+            return None
 
-        p915 = extract_open_price(latest_day, '09:15:00')
-        p919 = extract_close_price(latest_day, '09:19:00')
-        p315 = extract_open_price(previous_day, '15:15:00')
-        p329 = extract_close_price(previous_day, '15:29:00')
+        # Extract prices and volumes for current day (morning session)
+        p915, v915 = extract_price_and_volume(latest_day, '09:15:00', 'Open')
+        p919, v919 = extract_price_and_volume(latest_day, '09:19:00', 'Close')
+
+        # Extract prices and volumes for previous day (closing session)
+        p315, v315 = extract_price_and_volume(previous_day, '15:15:00', 'Open')
+        p329, v329 = extract_price_and_volume(previous_day, '15:29:00', 'Close')
 
         # Additional values
         open_price = extract_day_open(latest_day)
         prev_close = extract_day_close(previous_day)
-        current_price = extract_close_price(latest_day, '09:18:00')
+        current_price, _ = extract_price_and_volume(latest_day, '09:18:00', 'Close')
 
+        # Calculate changes
         morning_change = round(((p919 - p915)/p915)*100, 2) if p915 and p919 else None
         closing_change = round(((p329 - p315)/p315)*100, 2) if p315 and p329 else None
 
+        # Calculate volume changes
+        morning_volume_change = round(((v919 - v915)/v915)*100, 2) if v915 and v919 and v915 > 0 else None
+        closing_volume_change = round(((v329 - v315)/v315)*100, 2) if v315 and v329 and v315 > 0 else None
+
+        # Get company info
+        company_info = TICKER_INFO.get(ticker, {"company": "Unknown", "sector": "Unknown"})
+
         return {
             "ticker": ticker,
+            "company_name": company_info["company"],
+            "sector": company_info["sector"],
             "morning_date": str(latest_day),
             "p915": p915,
             "p919": p919,
+            "v915": v915,
+            "v919": v919,
             "morning_change": morning_change,
+            "morning_volume_change": morning_volume_change,
             "closing_date": str(previous_day),
             "p315": p315,
             "p329": p329,
+            "v315": v315,
+            "v329": v329,
             "closing_change": closing_change,
+            "closing_volume_change": closing_volume_change,
             "open_price": open_price,
             "prev_day_close": prev_close,
             "current_price": current_price
@@ -317,113 +515,168 @@ def get_data(ticker):
             "ticker": ticker,
             "error": str(e)
         }
-
-# Multithread wrapper for current analysis
-def get_all_tickers_data():
-    with ThreadPoolExecutor(max_workers=30) as executor:
-        results = list(executor.map(get_data, TICKERS))
-    return results
-
-# Multithread wrapper for date-specific analysis
-def get_all_tickers_data_for_date(target_date):
-    with ThreadPoolExecutor(max_workers=30) as executor:
-        results = list(executor.map(lambda ticker: get_data_for_date(ticker, target_date), TICKERS))
-    return results
-
-# Routes
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-@app.route("/analyze")
-def analyze():
-    data = get_all_tickers_data()
-    sorted_data = sorted(data, key=lambda x: x.get("morning_change") or 0, reverse=True)
-    return jsonify(sorted_data)
-
-@app.route("/gainers")
-def gainers():
-    data = get_all_tickers_data()
-    filtered = [d for d in data if d.get("morning_change") and d["morning_change"] >= 2 \
-                and (d.get("closing_change") is None or abs(d["closing_change"]) < 2)]
-    sorted_filtered = sorted(filtered, key=lambda x: x.get("morning_change") or 0, reverse=True)
-    return jsonify(sorted_filtered)
-
-# NEW ENDPOINTS FOR TEST TAB
-
-@app.route("/analyze-date")
-def analyze_date():
-    """Analyze all tickers for a specific date"""
-    target_date = request.args.get('date')
+def calculate_sector_performance(all_data):
+    """Calculate gains/losses dashboard for sectors"""
+    sector_stats = {}
     
-    if not target_date:
-        return jsonify({"error": "Date parameter is required"}), 400
+    for data in all_data:
+        if 'error' in data:
+            continue
+            
+        sector = data.get('sector', 'Unknown')
+        if sector not in sector_stats:
+            sector_stats[sector] = {
+                'sector': sector,
+                'total_stocks': 0,
+                'gainers': 0,
+                'losers': 0,
+                'unchanged': 0,
+                'morning_gainers': 0,
+                'morning_losers': 0,
+                'closing_gainers': 0,
+                'closing_losers': 0,
+                'avg_morning_change': 0,
+                'avg_closing_change': 0,
+                'total_morning_change': 0,
+                'total_closing_change': 0,
+                'stocks': []
+            }
+        
+        sector_stats[sector]['total_stocks'] += 1
+        
+        # Morning change analysis
+        morning_change = data.get('morning_change')
+        if morning_change is not None:
+            sector_stats[sector]['total_morning_change'] += morning_change
+            if morning_change > 0:
+                sector_stats[sector]['morning_gainers'] += 1
+            elif morning_change < 0:
+                sector_stats[sector]['morning_losers'] += 1
+        
+        # Closing change analysis
+        closing_change = data.get('closing_change')
+        if closing_change is not None:
+            sector_stats[sector]['total_closing_change'] += closing_change
+            if closing_change > 0:
+                sector_stats[sector]['closing_gainers'] += 1
+            elif closing_change < 0:
+                sector_stats[sector]['closing_losers'] += 1
+        
+        # Overall performance (using current price vs prev close if available)
+        if data.get('current_price') and data.get('prev_day_close'):
+            overall_change = ((data['current_price'] - data['prev_day_close']) / data['prev_day_close']) * 100
+            if overall_change > 0:
+                sector_stats[sector]['gainers'] += 1
+            elif overall_change < 0:
+                sector_stats[sector]['losers'] += 1
+            else:
+                sector_stats[sector]['unchanged'] += 1
+        
+        # Add stock to sector
+        sector_stats[sector]['stocks'].append({
+            'ticker': data['ticker'],
+            'company_name': data.get('company_name', 'Unknown'),
+            'morning_change': morning_change,
+            'closing_change': closing_change
+        })
     
-    try:
-        # Validate date format
-        datetime.strptime(target_date, '%Y-%m-%d')
-    except ValueError:
-        return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+    # Calculate averages
+    for sector in sector_stats:
+        total_stocks = sector_stats[sector]['total_stocks']
+        if total_stocks > 0:
+            sector_stats[sector]['avg_morning_change'] = round(
+                sector_stats[sector]['total_morning_change'] / total_stocks, 2
+            )
+            sector_stats[sector]['avg_closing_change'] = round(
+                sector_stats[sector]['total_closing_change'] / total_stocks, 2
+            )
     
-    try:
-        data = get_all_tickers_data_for_date(target_date)
-        # Sort by morning change (highest first)
-        sorted_data = sorted(data, key=lambda x: x.get("morning_change") or -999, reverse=True)
-        return jsonify(sorted_data)
-    except Exception as e:
-        return jsonify({"error": f"Failed to analyze data for {target_date}: {str(e)}"}), 500
+    # Convert to list and sort by total stocks
+    sector_list = list(sector_stats.values())
+    sector_list.sort(key=lambda x: x['total_stocks'], reverse=True)
+    
+    return sector_list
 
-@app.route("/mock-trade", methods=['POST'])
-def mock_trade():
-    """Execute mock trade analysis"""
-    try:
-        data = request.get_json()
-        
-        # Validate required parameters
-        required_fields = ['ticker', 'date', 'time', 'investment_amount']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({"error": f"Missing required field: {field}"}), 400
-        
-        ticker = data['ticker']
-        date = data['date']
-        time = data['time']
-        investment_amount = float(data['investment_amount'])
-        
-        # Validate inputs
-        if investment_amount <= 0:
-            return jsonify({"error": "Investment amount must be positive"}), 400
-        
-        try:
-            datetime.strptime(date, '%Y-%m-%d')
-        except ValueError:
-            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
-        
-        try:
-            datetime.strptime(time, '%H:%M')
-        except ValueError:
-            return jsonify({"error": "Invalid time format. Use HH:MM"}), 400
-        
-        # Validate time is within market hours
-        hour, minute = map(int, time.split(':'))
-        if hour < 9 or (hour == 9 and minute < 15) or hour > 15 or (hour == 15 and minute > 30):
-            return jsonify({"error": "Time must be within market hours (09:15 - 15:30)"}), 400
-        
-        # Execute mock trade
-        result = execute_mock_trade_analysis(ticker, date, time, investment_amount)
-        
-        if "error" in result:
-            return jsonify(result), 400
-        
-        return jsonify(result)
-        
-    except ValueError as e:
-        return jsonify({"error": f"Invalid investment amount: {str(e)}"}), 400
-    except Exception as e:
-        return jsonify({"error": f"Mock trade failed: {str(e)}"}), 500
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-import os
+@app.route('/api/data')
+def api_data():
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = {executor.submit(get_data, ticker): ticker for ticker in TICKERS}
+        results = []
+        for future in futures:
+            results.append(future.result())
+    
+    # Calculate sector performance
+    sector_performance = calculate_sector_performance(results)
+    
+    return jsonify({
+        'stocks': results,
+        'sectors': sector_performance,
+        'timestamp': datetime.now(IST).isoformat()
+    })
+
+@app.route('/api/historical/<ticker>/<date>')
+def api_historical(ticker, date):
+    if ticker not in TICKER_INFO:
+        return jsonify({"error": "Invalid ticker"}), 400
+    
+    result = get_data_for_date(ticker, date)
+    return jsonify(result)
+
+@app.route('/api/mock-trade', methods=['POST'])
+def api_mock_trade():
+    data = request.get_json()
+    ticker = data.get('ticker')
+    date = data.get('date')
+    time = data.get('time')
+    investment_amount = data.get('investment_amount', 10000)
+    
+    if not all([ticker, date, time]):
+        return jsonify({"error": "Missing required parameters"}), 400
+    
+    if ticker not in TICKER_INFO:
+        return jsonify({"error": "Invalid ticker"}), 400
+    
+    result = execute_mock_trade_analysis(ticker, date, time, investment_amount)
+    return jsonify(result)
+
+@app.route('/api/sectors')
+def api_sectors():
+    """Get sector-wise performance data"""
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = {executor.submit(get_data, ticker): ticker for ticker in TICKERS}
+        results = []
+        for future in futures:
+            results.append(future.result())
+    
+    sector_performance = calculate_sector_performance(results)
+    return jsonify({
+        'sectors': sector_performance,
+        'timestamp': datetime.now(IST).isoformat()
+    })
+
+@app.route('/api/sector/<sector_name>')
+def api_sector_details(sector_name):
+    """Get detailed information for a specific sector"""
+    sector_tickers = [ticker for ticker, info in TICKER_INFO.items() if info['sector'] == sector_name]
+    
+    if not sector_tickers:
+        return jsonify({"error": "Invalid sector name"}), 400
+    
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = {executor.submit(get_data, ticker): ticker for ticker in sector_tickers}
+        results = []
+        for future in futures:
+            results.append(future.result())
+    
+    return jsonify({
+        'sector': sector_name,
+        'stocks': results,
+        'timestamp': datetime.now(IST).isoformat()
+    })
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    app.run(debug=True)
