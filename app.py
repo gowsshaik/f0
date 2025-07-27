@@ -1,12 +1,17 @@
 import yfinance as yf
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from flask_cors import CORS
+from datetime import datetime, timedelta, time as dt_time
 import pytz
 import holidays
+import os
+from threading import Lock
+import time
 
 app = Flask(__name__)
+CORS(app)
 
 # Ticker List with Company Names and Sectors
 TICKER_INFO = {
@@ -191,21 +196,199 @@ TICKER_INFO = {
     "ZEEL.NS": {"company": "Zee Entertainment Enterprises Ltd", "sector": "Media & Entertainment"}
 }
 
-# Use only PVRINOX for testing
+# Use all tickers for production
 TICKERS = list(TICKER_INFO.keys())
-# For production, use: TICKERS = list(TICKER_INFO.keys())
-
 IST = pytz.timezone('Asia/Kolkata')
 IN_HOLIDAYS = holidays.India()
 
+# Global cache for data
+class DataCache:
+    def __init__(self):
+        self.current_data = {}
+        self.historical_cache = {}
+        self.time_filtered_cache = {}
+        self.last_update = None
+        self.cache_duration = 300  # 5 minutes cache
+        self.lock = Lock()
+    
+    def is_cache_valid(self):
+        if self.last_update is None:
+            return False
+        return (datetime.now() - self.last_update).seconds < self.cache_duration
+    
+    def get_current_data(self, force_last_working_day=False):
+        """Get current data, with option to force last working day data"""
+        with self.lock:
+            if not self.is_cache_valid():
+                self._fetch_current_data(force_last_working_day)
+            return self.current_data.copy()
+    
+    def get_historical_data(self, date):
+        with self.lock:
+            if date not in self.historical_cache:
+                self._fetch_historical_data(date)
+            return self.historical_cache.get(date, {})
+    
+    def get_time_filtered_data(self, target_date, current_time):
+        """Get data filtered by current time (9:15 AM to current_time)"""
+        cache_key = f"{target_date}_{current_time}"
+        
+        with self.lock:
+            if cache_key not in self.time_filtered_cache:
+                self._fetch_time_filtered_data(target_date, current_time)
+            return self.time_filtered_cache.get(cache_key, {})
+    
+    def _fetch_current_data(self, force_last_working_day=False):
+        """Fetch current data for all tickers in parallel"""
+        print("Fetching current data for all tickers...")
+        start_time = time.time()
+        
+        # Determine which dates to use
+        if force_last_working_day or not is_market_day(datetime.now(IST).date()):
+            # Use last working day data
+            previous_day, latest_day = get_last_two_working_days()
+            print(f"Using last working day data: {latest_day} (previous: {previous_day})")
+        else:
+            # Use regular current data logic
+            previous_day, latest_day = get_last_two_working_days()
+        
+        # Fetch data for all tickers in parallel
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # Submit all ticker fetch jobs
+            future_to_ticker = {
+                executor.submit(self._fetch_single_ticker_current, ticker, previous_day, latest_day): ticker 
+                for ticker in TICKERS
+            }
+            
+            results = {}
+            for future in as_completed(future_to_ticker):
+                ticker = future_to_ticker[future]
+                try:
+                    results[ticker] = future.result()
+                except Exception as e:
+                    results[ticker] = {"ticker": ticker, "error": str(e)}
+        
+        self.current_data = results
+        self.last_update = datetime.now()
+        
+        print(f"Current data fetch completed in {time.time() - start_time:.2f} seconds")
+    
+    def _fetch_historical_data(self, target_date):
+        """Fetch historical data for all tickers for a specific date"""
+        print(f"Fetching historical data for {target_date}...")
+        start_time = time.time()
+        
+        target_date_obj = datetime.strptime(target_date, '%Y-%m-%d').date()
+        
+        # If target date is not a market day, use the last working day
+        if not is_market_day(target_date_obj):
+            actual_target_date = get_previous_market_day(target_date_obj)
+            print(f"Target date {target_date} is not a market day. Using {actual_target_date} instead.")
+        else:
+            actual_target_date = target_date_obj
+        
+        # Get previous market day
+        previous_day = get_previous_market_day(actual_target_date)
+        
+        # Fetch data for all tickers in parallel
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_ticker = {
+                executor.submit(self._fetch_single_ticker_historical, ticker, actual_target_date, previous_day): ticker 
+                for ticker in TICKERS
+            }
+            
+            results = {}
+            for future in as_completed(future_to_ticker):
+                ticker = future_to_ticker[future]
+                try:
+                    result = future.result()
+                    # Add metadata about date adjustment
+                    if actual_target_date != target_date_obj:
+                        result['date_adjusted'] = True
+                        result['requested_date'] = target_date
+                        result['actual_date'] = str(actual_target_date)
+                        result['adjustment_reason'] = f"Requested date {target_date} was not a market day"
+                    results[ticker] = result
+                except Exception as e:
+                    results[ticker] = {"ticker": ticker, "error": str(e)}
+        
+        self.historical_cache[target_date] = results
+        print(f"Historical data fetch for {target_date} completed in {time.time() - start_time:.2f} seconds")
+    
+    def _fetch_time_filtered_data(self, target_date, current_time):
+        """Fetch time-filtered data for all tickers"""
+        print(f"Fetching time-filtered data for {target_date} up to {current_time}...")
+        start_time = time.time()
+        
+        target_date_obj = datetime.strptime(target_date, '%Y-%m-%d').date()
+        
+        # If target date is not a market day, use the last working day
+        if not is_market_day(target_date_obj):
+            actual_target_date = get_previous_market_day(target_date_obj)
+            print(f"Target date {target_date} is not a market day. Using {actual_target_date} instead.")
+        else:
+            actual_target_date = target_date_obj
+        
+        # Get previous market day
+        previous_day = get_previous_market_day(actual_target_date)
+        
+        # Fetch data for all tickers in parallel
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_ticker = {
+                executor.submit(self._fetch_single_ticker_time_filtered, ticker, actual_target_date, previous_day, current_time): ticker 
+                for ticker in TICKERS
+            }
+            
+            results = {}
+            for future in as_completed(future_to_ticker):
+                ticker = future_to_ticker[future]
+                try:
+                    result = future.result()
+                    # Add metadata about date adjustment
+                    if actual_target_date != target_date_obj:
+                        result['date_adjusted'] = True
+                        result['requested_date'] = target_date
+                        result['actual_date'] = str(actual_target_date)
+                        result['adjustment_reason'] = f"Requested date {target_date} was not a market day"
+                    results[ticker] = result
+                except Exception as e:
+                    results[ticker] = {"ticker": ticker, "error": str(e)}
+        
+        cache_key = f"{target_date}_{current_time}"
+        self.time_filtered_cache[cache_key] = results
+        print(f"Time-filtered data fetch for {target_date} up to {current_time} completed in {time.time() - start_time:.2f} seconds")
+    
+    def _fetch_single_ticker_current(self, ticker, previous_day, latest_day):
+        """Fetch current data for a single ticker"""
+        return process_ticker_data(ticker, latest_day, previous_day, is_current=True)
+    
+    def _fetch_single_ticker_historical(self, ticker, target_date_obj, previous_day):
+        """Fetch historical data for a single ticker"""
+        return process_ticker_data(ticker, target_date_obj, previous_day, is_current=False)
+    
+    def _fetch_single_ticker_time_filtered(self, ticker, target_date_obj, previous_day, current_time):
+        """Fetch time-filtered data for a single ticker"""
+        return process_ticker_data_time_filtered(ticker, target_date_obj, previous_day, current_time)
+
+# Initialize global cache
+data_cache = DataCache()
+
 # Helper functions
 def get_last_two_working_days():
+    """Get the last two working days, regardless of today being a working day or not"""
     today = datetime.now(IST).date()
     days = []
+    check_date = today
+    
+    # If today is not a working day, start from yesterday
+    if not is_market_day(today):
+        check_date = today - timedelta(days=1)
+    
     while len(days) < 2:
-        if today.weekday() < 5 and today not in IN_HOLIDAYS:
-            days.insert(0, today)
-        today -= timedelta(days=1)
+        if is_market_day(check_date):
+            days.insert(0, check_date)
+        check_date -= timedelta(days=1)
+    
     return days
 
 def is_market_day(date_obj):
@@ -219,32 +402,56 @@ def get_previous_market_day(date_obj):
         prev_date -= timedelta(days=1)
     return prev_date
 
-def get_data_for_date(ticker, target_date):
-    """Get stock data for a specific date - WITH VOLUME AND COMPANY INFO"""
+def get_next_market_day(date_obj):
+    """Get the next market day from given date"""
+    next_date = date_obj + timedelta(days=1)
+    while not is_market_day(next_date):
+        next_date += timedelta(days=1)
+    return next_date
+
+def search_tickers(query):
+    """Search for tickers based on company name, ticker symbol, or sector"""
+    if not query:
+        return TICKER_INFO
+    
+    query = query.lower()
+    results = {}
+    
+    for ticker, info in TICKER_INFO.items():
+        # Search in ticker symbol
+        if query in ticker.lower():
+            results[ticker] = info
+            continue
+        
+        # Search in company name
+        if query in info['company'].lower():
+            results[ticker] = info
+            continue
+        
+        # Search in sector
+        if query in info['sector'].lower():
+            results[ticker] = info
+            continue
+    
+    return results
+
+def process_ticker_data(ticker, target_date, previous_date, is_current=True):
+    """Process data for a single ticker - unified logic for current and historical"""
     try:
-        target_date_obj = datetime.strptime(target_date, '%Y-%m-%d').date()
-        
-        # Check if target date is a market day
-        if not is_market_day(target_date_obj):
-            return {
-                "ticker": ticker,
-                "error": f"Market closed on {target_date} (weekend/holiday)"
-            }
-        
-        # Get previous market day
-        previous_day = get_previous_market_day(target_date_obj)
-        
-        # Fetch historical data for only the 2 required days
-        start_date = previous_day
-        end_date = target_date_obj + timedelta(days=1)
-        print(f"Fetching data from {start_date} to {end_date}")
-        
-        hist = yf.Ticker(ticker).history(start=start_date, end=end_date, interval="1m")
+        # Determine the date range for fetching data
+        if is_current:
+            # For current data, fetch last 7 days
+            hist = yf.Ticker(ticker).history(period="7d", interval="1m")
+        else:
+            # For historical data, fetch specific date range
+            start_date = previous_date
+            end_date = target_date + timedelta(days=1)
+            hist = yf.Ticker(ticker).history(start=start_date, end=end_date, interval="1m")
         
         if hist.empty:
             return {
                 "ticker": ticker,
-                "error": f"No data available for {target_date}"
+                "error": f"No data available"
             }
         
         def extract_price_and_volume(date, time_str, price_type='Open'):
@@ -270,17 +477,17 @@ def get_data_for_date(ticker, target_date):
             return None
 
         # Extract prices and volumes for target date (morning session)
-        p915, v915 = extract_price_and_volume(target_date_obj, '09:15:00', 'Open')
-        p919, v919 = extract_price_and_volume(target_date_obj, '09:19:00', 'Close')
+        p915, v915 = extract_price_and_volume(target_date, '09:15:00', 'Open')
+        p919, v919 = extract_price_and_volume(target_date, '09:19:00', 'Close')
 
-        # Extract prices and volumes for previous market day (closing session)
-        p315, v315 = extract_price_and_volume(previous_day, '15:15:00', 'Open')
-        p329, v329 = extract_price_and_volume(previous_day, '15:29:00', 'Close')
+        # Extract prices and volumes for previous day (closing session)
+        p315, v315 = extract_price_and_volume(previous_date, '15:15:00', 'Open')
+        p329, v329 = extract_price_and_volume(previous_date, '15:29:00', 'Close')
 
         # Additional values
-        open_price = extract_day_open(target_date_obj)
-        prev_close = extract_day_close(previous_day)
-        current_price, _ = extract_price_and_volume(target_date_obj, '09:18:00', 'Close')
+        open_price = extract_day_open(target_date)
+        prev_close = extract_day_close(previous_date)
+        current_price, _ = extract_price_and_volume(target_date, '09:18:00', 'Close')
 
         # Calculate changes
         morning_change = round(((p919 - p915)/p915)*100, 2) if p915 and p919 else None
@@ -297,14 +504,14 @@ def get_data_for_date(ticker, target_date):
             "ticker": ticker,
             "company_name": company_info["company"],
             "sector": company_info["sector"],
-            "morning_date": str(target_date_obj),
+            "morning_date": str(target_date),
             "p915": p915,
             "p919": p919,
             "v915": v915,
             "v919": v919,
             "morning_change": morning_change,
             "morning_volume_change": morning_volume_change,
-            "closing_date": str(previous_day),
+            "closing_date": str(previous_date),
             "p315": p315,
             "p329": p329,
             "v315": v315,
@@ -322,43 +529,184 @@ def get_data_for_date(ticker, target_date):
             "error": str(e)
         }
 
+def process_ticker_data_time_filtered(ticker, target_date, previous_date, current_time):
+    """Process time-filtered data for a single ticker (9:15 AM to current_time)"""
+    try:
+        # Parse current_time
+        current_hour, current_minute = map(int, current_time.split(':'))
+        current_time_obj = dt_time(current_hour, current_minute)
+        
+        # Validate time range (must be between 9:15 and 15:30)
+        market_start = dt_time(9, 15)
+        market_end = dt_time(15, 30)
+        
+        if current_time_obj < market_start:
+            return {
+                "ticker": ticker,
+                "error": f"Market opens at 9:15 AM. Current time {current_time} is before market hours."
+            }
+        
+        if current_time_obj > market_end:
+            current_time_obj = market_end
+            current_time = "15:30"
+        
+        # Fetch data for the specific date range
+        start_date = previous_date
+        end_date = target_date + timedelta(days=1)
+        hist = yf.Ticker(ticker).history(start=start_date, end=end_date, interval="1m")
+        
+        if hist.empty:
+            return {
+                "ticker": ticker,
+                "error": f"No data available"
+            }
+        
+        # Filter data for target date and time range (9:15 to current_time)
+        day_data = hist[hist.index.date == target_date]
+        if day_data.empty:
+            return {
+                "ticker": ticker,
+                "error": f"No data available for {target_date}"
+            }
+        
+        # Filter by time range
+        filtered_data = day_data.between_time('09:15', current_time)
+        
+        if filtered_data.empty:
+            return {
+                "ticker": ticker,
+                "error": f"No data available between 09:15 and {current_time}"
+            }
+        
+        def extract_price_and_volume_filtered(date, time_str, price_type='Open'):
+            dt = f"{date} {time_str}"
+            if dt in hist.index:
+                price = round(hist.loc[dt][price_type], 2)
+                volume = int(hist.loc[dt]['Volume'])
+                return price, volume
+            return None, None
+        
+        def extract_day_close_prev(date):
+            day_data = hist[hist.index.date == date]
+            if not day_data.empty:
+                closes = day_data.between_time('15:25', '15:30')
+                return round(closes.iloc[-1]['Close'], 2) if not closes.empty else None
+            return None
+        
+        # Get opening price at 9:15
+        opening_price = round(filtered_data.iloc[0]['Open'], 2) if not filtered_data.empty else None
+        opening_volume = int(filtered_data.iloc[0]['Volume']) if not filtered_data.empty else None
+        
+        # Get current price (last available price in the filtered range)
+        current_price_filtered = round(filtered_data.iloc[-1]['Close'], 2) if not filtered_data.empty else None
+        current_volume = int(filtered_data.iloc[-1]['Volume']) if not filtered_data.empty else None
+        
+        # Get highest and lowest prices in the time range
+        high_price = round(filtered_data['High'].max(), 2) if not filtered_data.empty else None
+        low_price = round(filtered_data['Low'].min(), 2) if not filtered_data.empty else None
+        
+        # Get previous day's closing price
+        prev_close = extract_day_close_prev(previous_date)
+        
+        # Extract prices and volumes for previous day (closing session)
+        p315, v315 = extract_price_and_volume_filtered(previous_date, '15:15:00', 'Open')
+        p329, v329 = extract_price_and_volume_filtered(previous_date, '15:29:00', 'Close')
+        
+        # Calculate changes
+        intraday_change = round(((current_price_filtered - opening_price)/opening_price)*100, 2) if opening_price and current_price_filtered else None
+        overnight_change = round(((opening_price - prev_close)/prev_close)*100, 2) if opening_price and prev_close else None
+        overall_change = round(((current_price_filtered - prev_close)/prev_close)*100, 2) if current_price_filtered and prev_close else None
+        
+        # Volume analysis
+        total_volume = int(filtered_data['Volume'].sum()) if not filtered_data.empty else 0
+        avg_volume = int(filtered_data['Volume'].mean()) if not filtered_data.empty else 0
+        volume_change = round(((current_volume - opening_volume)/opening_volume)*100, 2) if opening_volume and current_volume and opening_volume > 0 else None
+        
+        # Previous day closing change
+        closing_change = round(((p329 - p315)/p315)*100, 2) if p315 and p329 else None
+        
+        # Get company info
+        company_info = TICKER_INFO.get(ticker, {"company": "Unknown", "sector": "Unknown"})
+        
+        # Generate minute-by-minute data for visualization
+        minute_data = []
+        for idx in filtered_data.index:
+            minute_data.append({
+                "time": idx.strftime('%H:%M'),
+                "price": round(filtered_data.loc[idx]['Close'], 2),
+                "volume": int(filtered_data.loc[idx]['Volume']),
+                "high": round(filtered_data.loc[idx]['High'], 2),
+                "low": round(filtered_data.loc[idx]['Low'], 2)
+            })
+        
+        return {
+            "ticker": ticker,
+            "company_name": company_info["company"],
+            "sector": company_info["sector"],
+            "date": str(target_date),
+            "time_range": f"09:15 - {current_time}",
+            "opening_price": opening_price,
+            "current_price": current_price_filtered,
+            "high_price": high_price,
+            "low_price": low_price,
+            "prev_day_close": prev_close,
+            "intraday_change": intraday_change,
+            "overnight_change": overnight_change,
+            "overall_change": overall_change,
+            "opening_volume": opening_volume,
+            "current_volume": current_volume,
+            "total_volume": total_volume,
+            "avg_volume": avg_volume,
+            "volume_change": volume_change,
+            "previous_day_closing_change": closing_change,
+            "minute_data": minute_data,
+            "data_points": len(minute_data)
+        }
+
+    except Exception as e:
+        return {
+            "ticker": ticker,
+            "error": str(e)
+        }
+
 def execute_mock_trade_analysis(ticker, date, time, investment_amount):
     """Execute mock trade analysis with minute-by-minute tracking"""
     try:
         target_date_obj = datetime.strptime(date, '%Y-%m-%d').date()
         
-        # Check if target date is a market day
+        # If target date is not a market day, use the last working day
         if not is_market_day(target_date_obj):
-            return {
-                "error": f"Market closed on {date} (weekend/holiday)"
-            }
+            actual_target_date = get_previous_market_day(target_date_obj)
+            print(f"Target date {date} is not a market day. Using {actual_target_date} instead.")
+        else:
+            actual_target_date = target_date_obj
         
         # Parse entry time
         entry_hour, entry_minute = map(int, time.split(':'))
-        entry_time_obj = datetime.combine(target_date_obj, datetime.min.time().replace(hour=entry_hour, minute=entry_minute))
+        entry_time_obj = datetime.combine(actual_target_date, datetime.min.time().replace(hour=entry_hour, minute=entry_minute))
         
         # Fetch minute-level data for the trading day
-        start_date = target_date_obj
-        end_date = target_date_obj + timedelta(days=1)
+        start_date = actual_target_date
+        end_date = actual_target_date + timedelta(days=1)
         
         hist = yf.Ticker(ticker).history(start=start_date, end=end_date, interval="1m")
         
         if hist.empty:
             return {
-                "error": f"No trading data available for {ticker} on {date}"
+                "error": f"No trading data available for {ticker} on {actual_target_date}"
             }
         
         # Filter data for market hours (9:15 AM to 3:30 PM)
         market_data = hist.between_time('09:15', '15:30')
-        market_data = market_data[market_data.index.date == target_date_obj]
+        market_data = market_data[market_data.index.date == actual_target_date]
         
         if market_data.empty:
             return {
-                "error": f"No market data available for {ticker} on {date}"
+                "error": f"No market data available for {ticker} on {actual_target_date}"
             }
         
         # Find entry price at specified time
-        entry_time_str = f"{target_date_obj} {time}:00"
+        entry_time_str = f"{actual_target_date} {time}:00"
         entry_price = None
         
         # Find the closest available time to entry time
@@ -370,7 +718,7 @@ def execute_mock_trade_analysis(ticker, date, time, investment_amount):
         
         if entry_price is None:
             return {
-                "error": f"No price data available at {time} on {date}"
+                "error": f"No price data available at {time} on {actual_target_date}"
             }
         
         # Calculate shares that can be bought
@@ -413,11 +761,11 @@ def execute_mock_trade_analysis(ticker, date, time, investment_amount):
         # Get company info
         company_info = TICKER_INFO.get(ticker, {"company": "Unknown", "sector": "Unknown"})
         
-        return {
+        result = {
             "ticker": ticker,
             "company_name": company_info["company"],
             "sector": company_info["sector"],
-            "date": date,
+            "date": str(actual_target_date),
             "entry_time": actual_entry_time,
             "entry_price": entry_price,
             "exit_price": best_exit_price,
@@ -429,97 +777,27 @@ def execute_mock_trade_analysis(ticker, date, time, investment_amount):
             "minute_prices": minute_prices
         }
         
+        # Add metadata if date was adjusted
+        if actual_target_date != target_date_obj:
+            result['date_adjusted'] = True
+            result['requested_date'] = date
+            result['adjustment_reason'] = f"Requested date {date} was not a market day"
+        
+        return result
+        
     except Exception as e:
         return {
             "error": str(e)
         }
 
-def get_data(ticker):
-    """Original get_data function for current analysis - WITH VOLUME AND COMPANY INFO"""
-    try:
-        now = datetime.now(IST)
-        previous_day, latest_day = get_last_two_working_days()
-        hist = yf.Ticker(ticker).history(period="7d", interval="1m")
-        
-        def extract_price_and_volume(date, time_str, price_type='Open'):
-            dt = f"{date} {time_str}"
-            if dt in hist.index:
-                price = round(hist.loc[dt][price_type], 2)
-                volume = int(hist.loc[dt]['Volume'])
-                return price, volume
-            return None, None
-        
-        def extract_day_open(date):
-            day_data = hist[hist.index.date == date]
-            if not day_data.empty:
-                opens = day_data.between_time('09:15', '09:45')
-                return round(opens.iloc[0]['Open'], 2) if not opens.empty else None
-            return None
-
-        def extract_day_close(date):
-            day_data = hist[hist.index.date == date]
-            if not day_data.empty:
-                closes = day_data.between_time('15:25', '15:30')
-                return round(closes.iloc[-1]['Close'], 2) if not closes.empty else None
-            return None
-
-        # Extract prices and volumes for current day (morning session)
-        p915, v915 = extract_price_and_volume(latest_day, '09:15:00', 'Open')
-        p919, v919 = extract_price_and_volume(latest_day, '09:19:00', 'Close')
-
-        # Extract prices and volumes for previous day (closing session)
-        p315, v315 = extract_price_and_volume(previous_day, '15:15:00', 'Open')
-        p329, v329 = extract_price_and_volume(previous_day, '15:29:00', 'Close')
-
-        # Additional values
-        open_price = extract_day_open(latest_day)
-        prev_close = extract_day_close(previous_day)
-        current_price, _ = extract_price_and_volume(latest_day, '09:18:00', 'Close')
-
-        # Calculate changes
-        morning_change = round(((p919 - p915)/p915)*100, 2) if p915 and p919 else None
-        closing_change = round(((p329 - p315)/p315)*100, 2) if p315 and p329 else None
-
-        # Calculate volume changes
-        morning_volume_change = round(((v919 - v915)/v915)*100, 2) if v915 and v919 and v915 > 0 else None
-        closing_volume_change = round(((v329 - v315)/v315)*100, 2) if v315 and v329 and v315 > 0 else None
-
-        # Get company info
-        company_info = TICKER_INFO.get(ticker, {"company": "Unknown", "sector": "Unknown"})
-
-        return {
-            "ticker": ticker,
-            "company_name": company_info["company"],
-            "sector": company_info["sector"],
-            "morning_date": str(latest_day),
-            "p915": p915,
-            "p919": p919,
-            "v915": v915,
-            "v919": v919,
-            "morning_change": morning_change,
-            "morning_volume_change": morning_volume_change,
-            "closing_date": str(previous_day),
-            "p315": p315,
-            "p329": p329,
-            "v315": v315,
-            "v329": v329,
-            "closing_change": closing_change,
-            "closing_volume_change": closing_volume_change,
-            "open_price": open_price,
-            "prev_day_close": prev_close,
-            "current_price": current_price
-        }
-
-    except Exception as e:
-        return {
-            "ticker": ticker,
-            "error": str(e)
-        }
 def calculate_sector_performance(all_data):
     """Calculate gains/losses dashboard for sectors"""
     sector_stats = {}
     
-    for data in all_data:
+    # Handle both list and dict formats
+    data_list = list(all_data.values()) if isinstance(all_data, dict) else all_data
+    
+    for data in data_list:
         if 'error' in data:
             continue
             
@@ -544,17 +822,17 @@ def calculate_sector_performance(all_data):
         
         sector_stats[sector]['total_stocks'] += 1
         
-        # Morning change analysis
-        morning_change = data.get('morning_change')
-        if morning_change is not None:
-            sector_stats[sector]['total_morning_change'] += morning_change
-            if morning_change > 0:
+        # Handle different data formats (current vs time-filtered)
+        change_field = data.get('morning_change') or data.get('intraday_change') or data.get('overall_change')
+        if change_field is not None:
+            sector_stats[sector]['total_morning_change'] += change_field
+            if change_field > 0:
                 sector_stats[sector]['morning_gainers'] += 1
-            elif morning_change < 0:
+            elif change_field < 0:
                 sector_stats[sector]['morning_losers'] += 1
         
         # Closing change analysis
-        closing_change = data.get('closing_change')
+        closing_change = data.get('closing_change') or data.get('previous_day_closing_change')
         if closing_change is not None:
             sector_stats[sector]['total_closing_change'] += closing_change
             if closing_change > 0:
@@ -562,9 +840,11 @@ def calculate_sector_performance(all_data):
             elif closing_change < 0:
                 sector_stats[sector]['closing_losers'] += 1
         
-        # Overall performance (using current price vs prev close if available)
-        if data.get('current_price') and data.get('prev_day_close'):
-            overall_change = ((data['current_price'] - data['prev_day_close']) / data['prev_day_close']) * 100
+        # Overall performance
+        current_price = data.get('current_price')
+        prev_close = data.get('prev_day_close')
+        if current_price and prev_close:
+            overall_change = ((current_price - prev_close) / prev_close) * 100
             if overall_change > 0:
                 sector_stats[sector]['gainers'] += 1
             elif overall_change < 0:
@@ -576,7 +856,7 @@ def calculate_sector_performance(all_data):
         sector_stats[sector]['stocks'].append({
             'ticker': data['ticker'],
             'company_name': data.get('company_name', 'Unknown'),
-            'morning_change': morning_change,
+            'change': change_field,
             'closing_change': closing_change
         })
     
@@ -597,34 +877,387 @@ def calculate_sector_performance(all_data):
     
     return sector_list
 
+# Routes
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/api/data')
 def api_data():
-    with ThreadPoolExecutor(max_workers=50) as executor:
-        futures = {executor.submit(get_data, ticker): ticker for ticker in TICKERS}
-        results = []
-        for future in futures:
-            results.append(future.result())
+    """Get current data for all tickers - uses cached data, falls back to last working day if weekend/holiday"""
+    # Check if today is a market day
+    today = datetime.now(IST).date()
+    is_today_market_day = is_market_day(today)
+    
+    # Force last working day data if today is not a market day
+    current_data = data_cache.get_current_data(force_last_working_day=not is_today_market_day)
+    
+    # Convert dict to list format for compatibility
+    results = list(current_data.values())
     
     # Calculate sector performance
-    sector_performance = calculate_sector_performance(results)
+    sector_performance = calculate_sector_performance(current_data)
     
-    return jsonify({
+    # Get the actual dates being used
+    last_two_days = get_last_two_working_days()
+    
+    response_data = {
+        'stocks': results,
+        'sectors': sector_performance,
+        'timestamp': datetime.now(IST).isoformat(),
+        'is_market_day': is_today_market_day,
+        'data_date': str(last_two_days[1]),  # Latest working day
+        'previous_date': str(last_two_days[0])  # Previous working day
+    }
+    
+    # Add weekend/holiday message if applicable
+    if not is_today_market_day:
+        if today.weekday() >= 5:  # Weekend
+            response_data['message'] = f"Market closed (Weekend). Showing data from last trading day: {last_two_days[1]}"
+        else:  # Holiday
+            response_data['message'] = f"Market closed (Holiday). Showing data from last trading day: {last_two_days[1]}"
+    
+    return jsonify(response_data)
+
+@app.route('/api/data/time-filtered')
+def api_data_time_filtered():
+    """Get time-filtered data (9:15 AM to current time) for all tickers"""
+    # Get query parameters
+    target_date = request.args.get('date')
+    current_time = request.args.get('time')
+    
+    # Use today's date if not provided
+    if not target_date:
+        today = datetime.now(IST).date()
+        if not is_market_day(today):
+            # Use last working day if today is not a market day
+            target_date = str(get_last_two_working_days()[1])
+        else:
+            target_date = str(today)
+    
+    # Use current time if not provided
+    if not current_time:
+        current_time = datetime.now(IST).strftime('%H:%M')
+    
+    try:
+        # Validate date format
+        datetime.strptime(target_date, '%Y-%m-%d')
+        # Validate time format
+        datetime.strptime(current_time, '%H:%M')
+    except ValueError:
+        return jsonify({"error": "Invalid date or time format. Use YYYY-MM-DD for date and HH:MM for time"}), 400
+    
+    time_filtered_data = data_cache.get_time_filtered_data(target_date, current_time)
+    
+    # Convert dict to list format for compatibility
+    results = list(time_filtered_data.values())
+    
+    # Calculate sector performance for time-filtered data
+    sector_performance = calculate_sector_performance(time_filtered_data)
+    
+    # Check if any date adjustment was made
+    date_adjusted = any(result.get('date_adjusted', False) for result in results if 'error' not in result)
+    actual_date = None
+    adjustment_reason = None
+    
+    if date_adjusted:
+        for result in results:
+            if result.get('date_adjusted', False):
+                actual_date = result.get('actual_date')
+                adjustment_reason = result.get('adjustment_reason')
+                break
+    
+    response_data = {
+        'date': target_date,
+        'time_range': f"09:15 - {current_time}",
         'stocks': results,
         'sectors': sector_performance,
         'timestamp': datetime.now(IST).isoformat()
-    })
+    }
+    
+    if date_adjusted:
+        response_data['date_adjusted'] = True
+        response_data['actual_date'] = actual_date
+        response_data['adjustment_reason'] = adjustment_reason
+    
+    return jsonify(response_data)
+
+@app.route('/api/search')
+def api_search():
+    """Search for tickers based on query"""
+    query = request.args.get('q', '').strip()
+    
+    if not query:
+        return jsonify({"error": "Search query is required"}), 400
+    
+    # Search for matching tickers
+    matching_tickers = search_tickers(query)
+    
+    if not matching_tickers:
+        return jsonify({
+            "query": query,
+            "results": [],
+            "message": "No tickers found matching your search"
+        })
+    
+    # Check if today is a market day
+    today = datetime.now(IST).date()
+    is_today_market_day = is_market_day(today)
+    
+    # Get current data for matching tickers only (force last working day if needed)
+    current_data = data_cache.get_current_data(force_last_working_day=not is_today_market_day)
+    
+    # Filter results to only include matching tickers
+    search_results = []
+    for ticker in matching_tickers:
+        if ticker in current_data:
+            search_results.append(current_data[ticker])
+        else:
+            # If not in cache, add basic info
+            search_results.append({
+                "ticker": ticker,
+                "company_name": matching_tickers[ticker]["company"],
+                "sector": matching_tickers[ticker]["sector"],
+                "message": "Data not available in cache"
+            })
+    
+    # Get the actual dates being used
+    last_two_days = get_last_two_working_days()
+    
+    response_data = {
+        "query": query,
+        "results": search_results,
+        "total_found": len(matching_tickers),
+        "timestamp": datetime.now(IST).isoformat(),
+        "is_market_day": is_today_market_day,
+        "data_date": str(last_two_days[1])
+    }
+    
+    # Add weekend/holiday message if applicable
+    if not is_today_market_day:
+        if today.weekday() >= 5:  # Weekend
+            response_data['message'] = f"Market closed (Weekend). Showing data from last trading day: {last_two_days[1]}"
+        else:  # Holiday
+            response_data['message'] = f"Market closed (Holiday). Showing data from last trading day: {last_two_days[1]}"
+    
+    return jsonify(response_data)
+
+@app.route('/api/search/time-filtered')
+def api_search_time_filtered():
+    """Search for tickers and get time-filtered data"""
+    query = request.args.get('q', '').strip()
+    target_date = request.args.get('date')
+    current_time = request.args.get('time')
+    
+    if not query:
+        return jsonify({"error": "Search query is required"}), 400
+    
+    # Use appropriate date if not provided
+    if not target_date:
+        today = datetime.now(IST).date()
+        if not is_market_day(today):
+            # Use last working day if today is not a market day
+            target_date = str(get_last_two_working_days()[1])
+        else:
+            target_date = str(today)
+    
+    # Use current time if not provided
+    if not current_time:
+        current_time = datetime.now(IST).strftime('%H:%M')
+    
+    try:
+        # Validate date format
+        datetime.strptime(target_date, '%Y-%m-%d')
+        # Validate time format
+        datetime.strptime(current_time, '%H:%M')
+    except ValueError:
+        return jsonify({"error": "Invalid date or time format. Use YYYY-MM-DD for date and HH:MM for time"}), 400
+    
+    # Search for matching tickers
+    matching_tickers = search_tickers(query)
+    
+    if not matching_tickers:
+        return jsonify({
+            "query": query,
+            "results": [],
+            "message": "No tickers found matching your search"
+        })
+    
+    # Get time-filtered data for matching tickers
+    time_filtered_data = data_cache.get_time_filtered_data(target_date, current_time)
+    
+    # Filter results to only include matching tickers
+    search_results = []
+    for ticker in matching_tickers:
+        if ticker in time_filtered_data:
+            search_results.append(time_filtered_data[ticker])
+        else:
+            # If not in cache, add basic info
+            search_results.append({
+                "ticker": ticker,
+                "company_name": matching_tickers[ticker]["company"],
+                "sector": matching_tickers[ticker]["sector"],
+                "message": "Time-filtered data not available"
+            })
+    
+    # Check if any date adjustment was made
+    date_adjusted = any(result.get('date_adjusted', False) for result in search_results if 'error' not in result)
+    actual_date = None
+    adjustment_reason = None
+    
+    if date_adjusted:
+        for result in search_results:
+            if result.get('date_adjusted', False):
+                actual_date = result.get('actual_date')
+                adjustment_reason = result.get('adjustment_reason')
+                break
+    
+    response_data = {
+        "query": query,
+        "date": target_date,
+        "time_range": f"09:15 - {current_time}",
+        "results": search_results,
+        "total_found": len(matching_tickers),
+        "timestamp": datetime.now(IST).isoformat()
+    }
+    
+    if date_adjusted:
+        response_data['date_adjusted'] = True
+        response_data['actual_date'] = actual_date
+        response_data['adjustment_reason'] = adjustment_reason
+    
+    return jsonify(response_data)
+
+@app.route('/api/ticker/<ticker>')
+def api_single_ticker(ticker):
+    """Get detailed data for a single ticker"""
+    if ticker not in TICKER_INFO:
+        return jsonify({"error": f"Invalid ticker: {ticker}"}), 400
+    
+    # Check if today is a market day
+    today = datetime.now(IST).date()
+    is_today_market_day = is_market_day(today)
+    
+    # Get current data (force last working day if needed)
+    current_data = data_cache.get_current_data(force_last_working_day=not is_today_market_day)
+    
+    if ticker in current_data:
+        result = current_data[ticker]
+        
+        # Add market status information
+        last_two_days = get_last_two_working_days()
+        result['is_market_day'] = is_today_market_day
+        result['data_date'] = str(last_two_days[1])
+        
+        if not is_today_market_day:
+            if today.weekday() >= 5:  # Weekend
+                result['message'] = f"Market closed (Weekend). Showing data from last trading day: {last_two_days[1]}"
+            else:  # Holiday
+                result['message'] = f"Market closed (Holiday). Showing data from last trading day: {last_two_days[1]}"
+        
+        return jsonify(result)
+    else:
+        return jsonify({"error": "Data not available for this ticker"}), 404
+
+@app.route('/api/ticker/<ticker>/time-filtered')
+def api_single_ticker_time_filtered(ticker):
+    """Get time-filtered data for a single ticker"""
+    if ticker not in TICKER_INFO:
+        return jsonify({"error": f"Invalid ticker: {ticker}"}), 400
+    
+    target_date = request.args.get('date')
+    current_time = request.args.get('time')
+    
+    # Use appropriate date if not provided
+    if not target_date:
+        today = datetime.now(IST).date()
+        if not is_market_day(today):
+            # Use last working day if today is not a market day
+            target_date = str(get_last_two_working_days()[1])
+        else:
+            target_date = str(today)
+    
+    # Use current time if not provided
+    if not current_time:
+        current_time = datetime.now(IST).strftime('%H:%M')
+    
+    try:
+        # Validate date format
+        datetime.strptime(target_date, '%Y-%m-%d')
+        # Validate time format
+        datetime.strptime(current_time, '%H:%M')
+    except ValueError:
+        return jsonify({"error": "Invalid date or time format. Use YYYY-MM-DD for date and HH:MM for time"}), 400
+    
+    # Get time-filtered data
+    time_filtered_data = data_cache.get_time_filtered_data(target_date, current_time)
+    
+    if ticker in time_filtered_data:
+        return jsonify(time_filtered_data[ticker])
+    else:
+        return jsonify({"error": "Time-filtered data not available for this ticker"}), 404
+
+@app.route('/api/historical/<date>')
+def api_historical_all(date):
+    """Get historical data for ALL tickers for a specific date"""
+    try:
+        # Validate date format
+        datetime.strptime(date, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+    
+    historical_data = data_cache.get_historical_data(date)
+    
+    # Convert dict to list format for compatibility
+    results = list(historical_data.values())
+    
+    # Calculate sector performance for historical data
+    sector_performance = calculate_sector_performance(historical_data)
+    
+    # Check if any date adjustment was made
+    date_adjusted = any(result.get('date_adjusted', False) for result in results if 'error' not in result)
+    actual_date = None
+    adjustment_reason = None
+    
+    if date_adjusted:
+        for result in results:
+            if result.get('date_adjusted', False):
+                actual_date = result.get('actual_date')
+                adjustment_reason = result.get('adjustment_reason')
+                break
+    
+    response_data = {
+        'date': date,
+        'stocks': results,
+        'sectors': sector_performance,
+        'timestamp': datetime.now(IST).isoformat()
+    }
+    
+    if date_adjusted:
+        response_data['date_adjusted'] = True
+        response_data['actual_date'] = actual_date
+        response_data['adjustment_reason'] = adjustment_reason
+    
+    return jsonify(response_data)
 
 @app.route('/api/historical/<ticker>/<date>')
-def api_historical(ticker, date):
+def api_historical_single(ticker, date):
+    """Get historical data for a single ticker (backward compatibility)"""
     if ticker not in TICKER_INFO:
         return jsonify({"error": "Invalid ticker"}), 400
     
-    result = get_data_for_date(ticker, date)
-    return jsonify(result)
+    try:
+        # Validate date format
+        datetime.strptime(date, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+    
+    historical_data = data_cache.get_historical_data(date)
+    
+    if ticker in historical_data:
+        return jsonify(historical_data[ticker])
+    else:
+        return jsonify({"error": "No data available for this ticker"}), 404
 
 @app.route('/api/mock-trade', methods=['POST'])
 def api_mock_trade():
@@ -645,38 +1278,161 @@ def api_mock_trade():
 
 @app.route('/api/sectors')
 def api_sectors():
-    """Get sector-wise performance data"""
-    with ThreadPoolExecutor(max_workers=50) as executor:
-        futures = {executor.submit(get_data, ticker): ticker for ticker in TICKERS}
-        results = []
-        for future in futures:
-            results.append(future.result())
+    """Get sector-wise performance data - uses cached data"""
+    # Check if today is a market day
+    today = datetime.now(IST).date()
+    is_today_market_day = is_market_day(today)
     
-    sector_performance = calculate_sector_performance(results)
-    return jsonify({
+    # Get current data (force last working day if needed)
+    current_data = data_cache.get_current_data(force_last_working_day=not is_today_market_day)
+    sector_performance = calculate_sector_performance(current_data)
+    
+    # Get the actual dates being used
+    last_two_days = get_last_two_working_days()
+    
+    response_data = {
         'sectors': sector_performance,
-        'timestamp': datetime.now(IST).isoformat()
-    })
+        'timestamp': datetime.now(IST).isoformat(),
+        'is_market_day': is_today_market_day,
+        'data_date': str(last_two_days[1])
+    }
+    
+    # Add weekend/holiday message if applicable
+    if not is_today_market_day:
+        if today.weekday() >= 5:  # Weekend
+            response_data['message'] = f"Market closed (Weekend). Showing data from last trading day: {last_two_days[1]}"
+        else:  # Holiday
+            response_data['message'] = f"Market closed (Holiday). Showing data from last trading day: {last_two_days[1]}"
+    
+    return jsonify(response_data)
 
 @app.route('/api/sector/<sector_name>')
 def api_sector_details(sector_name):
-    """Get detailed information for a specific sector"""
-    sector_tickers = [ticker for ticker, info in TICKER_INFO.items() if info['sector'] == sector_name]
+    """Get detailed information for a specific sector - uses cached data"""
+    # Check if today is a market day
+    today = datetime.now(IST).date()
+    is_today_market_day = is_market_day(today)
     
-    if not sector_tickers:
-        return jsonify({"error": "Invalid sector name"}), 400
+    # Get current data (force last working day if needed)
+    current_data = data_cache.get_current_data(force_last_working_day=not is_today_market_day)
     
-    with ThreadPoolExecutor(max_workers=50) as executor:
-        futures = {executor.submit(get_data, ticker): ticker for ticker in sector_tickers}
-        results = []
-        for future in futures:
-            results.append(future.result())
+    # Filter stocks by sector
+    sector_stocks = {}
+    for ticker, data in current_data.items():
+        if data.get('sector') == sector_name:
+            sector_stocks[ticker] = data
     
-    return jsonify({
+    if not sector_stocks:
+        return jsonify({"error": "Invalid sector name or no stocks found"}), 400
+    
+    # Get the actual dates being used
+    last_two_days = get_last_two_working_days()
+    
+    response_data = {
         'sector': sector_name,
-        'stocks': results,
+        'stocks': list(sector_stocks.values()),
+        'timestamp': datetime.now(IST).isoformat(),
+        'is_market_day': is_today_market_day,
+        'data_date': str(last_two_days[1])
+    }
+    
+    # Add weekend/holiday message if applicable
+    if not is_today_market_day:
+        if today.weekday() >= 5:  # Weekend
+            response_data['message'] = f"Market closed (Weekend). Showing data from last trading day: {last_two_days[1]}"
+        else:  # Holiday
+            response_data['message'] = f"Market closed (Holiday). Showing data from last trading day: {last_two_days[1]}"
+    
+    return jsonify(response_data)
+
+@app.route('/api/refresh', methods=['POST'])
+def api_refresh():
+    """Manually refresh current data cache"""
+    data_cache.last_update = None  # Force refresh
+    
+    # Check if today is a market day
+    today = datetime.now(IST).date()
+    is_today_market_day = is_market_day(today)
+    
+    # Get current data (force last working day if needed)
+    current_data = data_cache.get_current_data(force_last_working_day=not is_today_market_day)
+    
+    # Get the actual dates being used
+    last_two_days = get_last_two_working_days()
+    
+    response_data = {
+        'message': 'Data refreshed successfully',
+        'stocks_count': len(current_data),
+        'timestamp': datetime.now(IST).isoformat(),
+        'is_market_day': is_today_market_day,
+        'data_date': str(last_two_days[1])
+    }
+    
+    # Add weekend/holiday message if applicable
+    if not is_today_market_day:
+        if today.weekday() >= 5:  # Weekend
+            response_data['refresh_message'] = f"Market closed (Weekend). Refreshed with data from last trading day: {last_two_days[1]}"
+        else:  # Holiday
+            response_data['refresh_message'] = f"Market closed (Holiday). Refreshed with data from last trading day: {last_two_days[1]}"
+    
+    return jsonify(response_data)
+
+@app.route('/api/tickers')
+def api_list_tickers():
+    """Get list of all available tickers with company info"""
+    return jsonify({
+        'tickers': TICKER_INFO,
+        'total_count': len(TICKER_INFO),
         'timestamp': datetime.now(IST).isoformat()
     })
 
+@app.route('/api/market-status')
+def api_market_status():
+    """Get current market status"""
+    now = datetime.now(IST)
+    current_date = now.date()
+    current_time = now.time()
+    
+    is_market_open = False
+    market_session = "Closed"
+    
+    if is_market_day(current_date):
+        market_start = dt_time(9, 15)
+        market_end = dt_time(15, 30)
+        
+        if market_start <= current_time <= market_end:
+            is_market_open = True
+            if dt_time(9, 15) <= current_time <= dt_time(11, 30):
+                market_session = "Morning Session"
+            elif dt_time(11, 30) < current_time <= dt_time(13, 0):
+                market_session = "Break"
+            else:
+                market_session = "Afternoon Session"
+        elif current_time < market_start:
+            market_session = "Pre-Market"
+        else:
+            market_session = "Post-Market"
+    else:
+        if current_date.weekday() >= 5:  # Weekend
+            market_session = "Weekend"
+        else:  # Holiday
+            market_session = "Market Holiday"
+    
+    # Get last working day info
+    last_two_days = get_last_two_working_days()
+    
+    return jsonify({
+        'is_market_open': is_market_open,
+        'market_session': market_session,
+        'is_market_day': is_market_day(current_date),
+        'current_time': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'current_date': str(current_date),
+        'last_trading_day': str(last_two_days[1]),
+        'previous_trading_day': str(last_two_days[0]),
+        'next_trading_day': str(get_next_market_day(current_date)),
+        'timestamp': now.isoformat()
+    })
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
