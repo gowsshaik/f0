@@ -5,3 +5,4 @@ numpy
 holidays
 pytz
 holidays
+flask_cors
